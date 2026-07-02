@@ -339,6 +339,22 @@ class TimelineView(QWidget):
         self.edited.emit(f"Added {media.path.name} to the end")
         self.update()
 
+    def set_playhead(self, t: float, emit: bool = False) -> None:
+        """Move the playhead (ruler scrub, or the viewer telling us)."""
+        self.playhead = max(0.0, t)
+        if emit:
+            self.playhead_moved.emit(self.playhead)
+        self.update()
+
+    def begin_external_edit(self) -> None:
+        """The viewer (or another widget) is about to mutate a clip —
+        capture the undo snapshot exactly like an internal edit."""
+        self.about_to_edit.emit()
+
+    def end_external_edit(self, description: str) -> None:
+        self.edited.emit(description)
+        self.update()
+
     def apply_timeline(self, timeline: Timeline, description: str) -> None:
         """Swap in a transformed timeline (ripple cuts, automations)."""
         self.about_to_edit.emit()
@@ -370,9 +386,8 @@ class TimelineView(QWidget):
         if event.button() != Qt.LeftButton:
             return
         if pos.y() <= RULER_H:
-            self.playhead = self.t_at(pos.x())
-            self.playhead_moved.emit(self.playhead)
-            self.update()
+            self._drag = ("scrub",)
+            self.set_playhead(self.t_at(pos.x()), emit=True)
             return
         clip, edge = self._hit(pos)
         self._select(clip)
@@ -398,7 +413,9 @@ class TimelineView(QWidget):
             self.update()
             return
         mode = self._drag[0]
-        if mode == "move":
+        if mode == "scrub":
+            self.set_playhead(self.t_at(pos.x()), emit=True)
+        elif mode == "move":
             _, clip, grab = self._drag
             t = self.snap_time(self.t_at(pos.x()) - grab, ignore=clip)
             clip.timeline_start = Fraction(max(0.0, t)).limit_denominator(48000)
@@ -412,7 +429,9 @@ class TimelineView(QWidget):
         if self._drag is None:
             return
         mode = self._drag[0]
-        if mode == "move":
+        if mode == "scrub":
+            self._drag = None
+        elif mode == "move":
             _, clip, _ = self._drag
             self._drag = None
             self.move_overlay(clip, float(clip.timeline_start))

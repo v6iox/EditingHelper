@@ -857,6 +857,7 @@ class MainWindow(QWidget):
         from .update import UpdateCheckWorker, UpdateInstallWorker
 
         self.hide()
+        self.rec_page.viewer_panel.shutdown()  # stop the frame fetcher
         for worker_type in (UpdateCheckWorker, UpdateInstallWorker):
             for thread in self.findChildren(worker_type):
                 if thread.isRunning():

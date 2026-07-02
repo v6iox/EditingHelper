@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.6.0 — 2026-07-02
+
+- **Live viewer in the studio.** Recreational mode now has a real
+  program monitor above the timeline: it shows the composed frame at
+  the playhead — main camera (blurred where the blurred-background
+  style is active) with every glasses clip framed exactly as the
+  finished video will frame it. **Play/pause** runs a silent live
+  preview; the draft render still has the sound.
+- **Scrubbing everywhere.** Drag the **puck** under the picture, or
+  drag directly in the timeline ruler — the picture follows in real
+  time (frames are decoded in the background and cached, so the UI
+  never stalls).
+- **Drag what's visible.** Grab a glasses clip *inside the picture*
+  and drop it where you want it. The new position is undoable, drawn
+  live, and honored end-to-end: the finished-video render, Final Cut
+  (`adjust-transform`), CapCut drafts, and OTIO metadata all place the
+  clip where you dropped it. (Also fixed the CapCut draft's vertical
+  axis, which pointed the opposite way from Final Cut's.)
+
 ## 1.5.0 — 2026-07-02
 
 - **Fixed: automatic update checks never worked in the packaged app.**

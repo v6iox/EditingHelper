@@ -16,9 +16,10 @@ Comes in three flavors:
   two sides, switched from the corner: **Training mode** (drag in
   footage, pick options in plain language, press one button) and
   **Recreational mode** (the same synced footage on a real multi-track
-  timeline with an auto-editing suite: tighten dead air, keep the best
-  moments, cut to the music's beat, intuitive portion picking, draft
-  previews). ffmpeg is bundled; nothing to install, no terminal. See
+  timeline with an auto-editing suite: a live viewer with scrubbing and
+  playback, drag-in-the-picture framing, tighten dead air, keep the
+  best moments, cut to the music's beat, intuitive portion picking,
+  draft previews). ffmpeg is bundled; nothing to install, no terminal. See
   [docs/APP_GUIDE.md](docs/APP_GUIDE.md) for downloading/using it and how
   releases are built (GitHub Actions produces the macOS `.dmg` and
   Windows `.zip`; `./packaging/build_macos.sh` builds locally).

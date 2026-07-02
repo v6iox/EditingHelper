@@ -9,4 +9,4 @@ editing application means writing one new exporter against the Timeline
 model, without touching the sync engine.
 """
 
-__version__ = "1.4.1"
+__version__ = "1.5.0"

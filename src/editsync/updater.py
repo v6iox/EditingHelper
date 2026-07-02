@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import os
+import ssl
 import subprocess
 import sys
 import tempfile
@@ -45,6 +46,39 @@ class UpdateInfo:
     tag: str  # e.g. "v1.1.0"
     asset_url: str  # API url of the platform asset
     page_url: str  # human release page
+
+
+@dataclass
+class CheckResult:
+    """Outcome of an update check, suitable for showing to the user.
+
+    status: "update" (info is set), "current" (detail = newest version),
+    or "error" (detail = a plain-language reason)."""
+
+    status: str
+    info: Optional[UpdateInfo] = None
+    detail: str = ""
+
+
+def _ssl_context() -> ssl.SSLContext:
+    """A context that can actually verify github.com inside the app.
+
+    The packaged app (PyInstaller) ships Python's ssl module with NO
+    certificate store — macOS never exposes its keychain to OpenSSL —
+    so a bare urlopen() failed certificate verification on every machine
+    and the updater silently did nothing.
+
+    Start from the platform defaults (a Windows machine's store includes
+    corporate TLS-inspection roots that certifi doesn't have) and ADD
+    certifi's bundle on top, so both worlds verify."""
+    context = ssl.create_default_context()
+    try:
+        import certifi
+
+        context.load_verify_locations(cafile=certifi.where())
+    except Exception:
+        pass  # no certifi: the platform store alone (dev machines) works
+    return context
 
 
 def parse_version(text: str) -> tuple[int, ...]:
@@ -93,48 +127,106 @@ def platform_asset_name() -> str:
     return WIN_ASSET if sys.platform == "win32" else MAC_ASSET
 
 
-def check_for_update() -> Optional[UpdateInfo]:
-    """Return UpdateInfo when a newer release exists, else None.
+def check_for_update_detailed() -> CheckResult:
+    """Ask GitHub for the latest release and say what happened.
 
-    Network or permission problems (offline, private repo without a
-    token) return None — the app never bothers the user about them.
-    """
+    Never raises — every failure becomes a CheckResult("error", ...)
+    with a reason a person can act on. The silent auto-check at launch
+    and the visible "Check for updates" button both run through here."""
     try:
         with urllib.request.urlopen(
-            _request(API_LATEST, "application/vnd.github+json"), timeout=TIMEOUT
+            _request(API_LATEST, "application/vnd.github+json"),
+            timeout=TIMEOUT,
+            context=_ssl_context(),
         ) as response:
             release = json.load(response)
-    except (urllib.error.URLError, TimeoutError, ValueError, OSError):
-        return None
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            return CheckResult("error", detail="No releases were found.")
+        if exc.code in (403, 429):
+            return CheckResult(
+                "error",
+                detail="GitHub is rate-limiting this network — "
+                "try again in a few minutes.",
+            )
+        return CheckResult(
+            "error", detail=f"GitHub answered with an error (HTTP {exc.code})."
+        )
+    except urllib.error.URLError as exc:
+        reason = getattr(exc, "reason", exc)
+        if isinstance(reason, ssl.SSLError) or "certificate" in str(reason).lower():
+            return CheckResult(
+                "error",
+                detail="Secure connection to GitHub failed — the server's "
+                "certificate couldn't be verified.",
+            )
+        return CheckResult(
+            "error", detail="Couldn't reach GitHub — check your internet connection."
+        )
+    except (TimeoutError, ValueError, OSError):
+        return CheckResult(
+            "error", detail="Couldn't reach GitHub — check your internet connection."
+        )
+    except Exception:
+        # e.g. http.client.IncompleteRead when the response is truncated
+        # mid-body — it subclasses neither OSError nor ValueError. The
+        # "never raises" promise above must hold or the footer wedges.
+        return CheckResult(
+            "error",
+            detail="The connection to GitHub was interrupted — try again.",
+        )
 
     tag = release.get("tag_name", "")
     if not is_newer(tag):
-        return None
+        return CheckResult("current", detail=tag.lstrip("vV") or __version__)
     wanted = platform_asset_name()
     asset = next(
         (a for a in release.get("assets", []) if a.get("name") == wanted),
         None,
     )
     if asset is None:
-        return None
-    return UpdateInfo(
-        version=tag.lstrip("vV"),
-        tag=tag,
-        asset_url=asset.get("url", ""),
-        page_url=release.get("html_url", RELEASES_PAGE),
+        return CheckResult(
+            "error",
+            detail=f"{tag} is out, but its download isn't ready yet — "
+            "try again in a few minutes.",
+        )
+    return CheckResult(
+        "update",
+        info=UpdateInfo(
+            version=tag.lstrip("vV"),
+            tag=tag,
+            asset_url=asset.get("url", ""),
+            page_url=release.get("html_url", RELEASES_PAGE),
+        ),
     )
 
 
-def download_asset(info: UpdateInfo, progress=lambda pct: None) -> Path:
-    """Download the platform asset to a temp file, reporting 0-100."""
+def check_for_update() -> Optional[UpdateInfo]:
+    """Return UpdateInfo when a newer release exists, else None."""
+    return check_for_update_detailed().info
+
+
+def download_asset(
+    info: UpdateInfo,
+    progress=lambda pct: None,
+    cancelled=lambda: False,
+) -> Path:
+    """Download the platform asset to a temp file, reporting 0-100.
+
+    `cancelled` is polled between chunks so the app can abandon a
+    download cleanly (e.g. the user quits) instead of being killed."""
     target = Path(tempfile.mkdtemp(prefix="editsync-update-")) / platform_asset_name()
     try:
         with urllib.request.urlopen(
-            _request(info.asset_url, "application/octet-stream"), timeout=TIMEOUT
+            _request(info.asset_url, "application/octet-stream"),
+            timeout=TIMEOUT,
+            context=_ssl_context(),
         ) as response, open(target, "wb") as out:
             total = int(response.headers.get("Content-Length") or 0)
             done = 0
             while True:
+                if cancelled():
+                    raise UpdateError("Update cancelled.")
                 chunk = response.read(256 * 1024)
                 if not chunk:
                     break

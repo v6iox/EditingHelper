@@ -12,9 +12,13 @@ ffmpeg is bundled. Mac first launch: right-click → Open (unsigned app).
 
 Comes in three flavors:
 
-- **The EditSync app** — a downloadable black-and-white desktop app:
-  drag in footage, pick options in plain language, press one button.
-  ffmpeg is bundled; nothing to install, no terminal. See
+- **The EditSync app** — a downloadable black-and-white desktop app with
+  two sides, switched from the corner: **Training mode** (drag in
+  footage, pick options in plain language, press one button) and
+  **Recreational mode** (the same synced footage on a real multi-track
+  timeline with an auto-editing suite: tighten dead air, keep the best
+  moments, cut to the music's beat, intuitive portion picking, draft
+  previews). ffmpeg is bundled; nothing to install, no terminal. See
   [docs/APP_GUIDE.md](docs/APP_GUIDE.md) for downloading/using it and how
   releases are built (GitHub Actions produces the macOS `.dmg` and
   Windows `.zip`; `./packaging/build_macos.sh` builds locally).
@@ -119,6 +123,11 @@ editsync sync ./footage -o myvideo.fcpxml --search-window 120
   level (`--music song.mp3 --music-volume -22`), each pass its own
   trimmable clip on a layer below; `--music-duck` silences it under
   glasses clips with smooth fades. Both off by default.
+- **Auto-editing (recreational mode)** — silence detection to
+  ripple-cut dead air (glasses clips keep sync by construction), music
+  tempo/beat detection to land cuts on the beat, loudness+activity
+  highlight scoring to keep only the best moments — all pure
+  numpy in `autoedit.py`, driven by the app's timeline editor.
 - **Auto-updates** — the app offers one-click self-update from the
   bottom-left corner when a newer release is available.
 - **Roles** — clips are tagged `dialogue.DJI` / `dialogue.Meta` in FCP so
@@ -146,9 +155,11 @@ src/editsync/
   sync.py         two-stage cross-correlation, confidence, drift
   timeline.py     editor-agnostic timeline model (rational times)
   builder.py      orchestration: match, place, layer, duck
+  autoedit.py     auto-editing brains: silences, beats, highlights, cuts
   report.py       text/JSON sync reports
   cli.py          `editsync` command
-  gui/            the desktop app (PySide6, monochrome theme)
+  gui/            the desktop app (PySide6, monochrome theme;
+                  editor.py + recreational.py are the studio side)
   exporters/
     fcpxml.py     Final Cut Pro (primary target)
     premiere.py   Adobe Premiere Pro (xmeml)

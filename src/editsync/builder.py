@@ -193,6 +193,40 @@ def add_music(timeline: Timeline, music: MediaFile, opts: BuildOptions) -> None:
         pos += music.duration
 
 
+def refresh_regions(timeline: Timeline, opts: BuildOptions) -> None:
+    """(Re)compute the primary treatment under overlays — audio duck,
+    optional background blur, optional music duck — from the overlay
+    clips currently on the timeline. Called at build time and again by
+    the editor after any structural edit (move/trim/cut/montage)."""
+    overlay_intervals = merge_intervals(
+        [(c.timeline_start, c.timeline_end) for c in timeline.overlay_clips]
+    )
+    timeline.duck_regions = (
+        [
+            DuckRegion(start=s, end=e, level_db=opts.duck_db)
+            for s, e in overlay_intervals
+        ]
+        if opts.duck_db is not None
+        else []
+    )
+    timeline.blur_regions = (
+        [
+            BlurRegion(start=s, end=e, amount=opts.blur_amount)
+            for s, e in overlay_intervals
+        ]
+        if opts.overlay_style == "blur-bg" and opts.blur_amount > 0
+        else []
+    )
+    timeline.music_duck_regions = (
+        [
+            DuckRegion(start=s, end=e, level_db=-96.0)
+            for s, e in overlay_intervals
+        ]
+        if opts.music_duck and timeline.music_clips
+        else []
+    )
+
+
 def build(
     primaries: list[MediaFile],
     overlays: list[MediaFile],
@@ -384,21 +418,6 @@ def build(
 
     assign_lanes(timeline.clips, lane_per_clip=opts.lane_per_clip)
 
-    # --- primary treatment under overlays: audio duck, optional blur ----
-    overlay_intervals = merge_intervals(
-        [(c.timeline_start, c.timeline_end) for c in timeline.overlay_clips]
-    )
-    if opts.duck_db is not None:
-        timeline.duck_regions = [
-            DuckRegion(start=s, end=e, level_db=opts.duck_db)
-            for s, e in overlay_intervals
-        ]
-    if opts.overlay_style == "blur-bg" and opts.blur_amount > 0:
-        timeline.blur_regions = [
-            BlurRegion(start=s, end=e, amount=opts.blur_amount)
-            for s, e in overlay_intervals
-        ]
-
     # --- opening title card ----------------------------------------------
     if opts.title_text.strip():
         timeline.title_card = TitleCard(
@@ -417,10 +436,8 @@ def build(
     if music is not None:
         progress(f"Laying {music.path.name} under the timeline...")
         add_music(timeline, music, opts)
-        if opts.music_duck:
-            timeline.music_duck_regions = [
-                DuckRegion(start=s, end=e, level_db=-96.0)
-                for s, e in overlay_intervals
-            ]
+
+    # --- primary treatment under overlays: duck, blur, music duck -------
+    refresh_regions(timeline, opts)
 
     return BuildResult(timeline=timeline, matches=matches, warnings=warnings)

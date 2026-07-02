@@ -1,5 +1,7 @@
-"""In-app update prompt: a small pill in the bottom-left corner that
-appears when a newer release exists and applies the update on click."""
+"""In-app updates: the silent check at launch (bottom-left pill when a
+newer release exists) and the visible "Check for updates" footer action
+that always reports what happened — up to date, update ready, or the
+exact reason the check failed."""
 
 from __future__ import annotations
 
@@ -14,19 +16,26 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .. import updater
+from .. import __version__, updater
 from .widgets import AnimatedButton
 
 MARGIN = 16
 
 
 class UpdateCheckWorker(QThread):
-    found = Signal(object)  # updater.UpdateInfo
+    checked = Signal(object)  # updater.CheckResult — always emitted
+    found = Signal(object)  # updater.UpdateInfo — only when one exists
 
     def run(self) -> None:
-        info = updater.check_for_update()
-        if info is not None:
-            self.found.emit(info)
+        try:
+            result = updater.check_for_update_detailed()
+        except Exception as exc:  # belt and braces: checked must always fire
+            result = updater.CheckResult(
+                "error", detail=f"Update check failed: {exc}"
+            )
+        self.checked.emit(result)
+        if result.status == "update" and result.info is not None:
+            self.found.emit(result.info)
 
 
 class UpdateInstallWorker(QThread):
@@ -39,9 +48,13 @@ class UpdateInstallWorker(QThread):
 
     def run(self) -> None:
         try:
-            payload = updater.download_asset(self.info, self.progress.emit)
+            payload = updater.download_asset(
+                self.info, self.progress.emit, self.isInterruptionRequested
+            )
             updater.install_and_restart(payload)  # exits the process on success
         except updater.UpdateError as exc:
+            self.failed.emit(str(exc))
+        except Exception as exc:  # never die silently mid-install
             self.failed.emit(str(exc))
 
 
@@ -87,6 +100,11 @@ class UpdatePill(QFrame):
         if parent is not None:
             self.move(MARGIN, parent.height() - self.height() - MARGIN)
 
+    def install_running(self) -> bool:
+        """True while a download/install is in flight — the pill (and its
+        worker thread) must not be destroyed then."""
+        return self._install_worker is not None and self._install_worker.isRunning()
+
     def _start_install(self) -> None:
         self.update_btn.setEnabled(False)
         self.label.setText("Downloading…")
@@ -108,11 +126,66 @@ class UpdatePill(QFrame):
         self.update_btn.setEnabled(True)
 
 
+class UpdateFooter(QWidget):
+    """The visible side of updates: version line, a "Check for updates"
+    action, and an honest status — "you're up to date", "X is ready",
+    or exactly why the check failed (the launch check stays silent)."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._worker: UpdateCheckWorker | None = None
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+        layout.addStretch(1)
+        version = QLabel(f"EditSync {__version__} — 86 Auto Lab  ·")
+        version.setObjectName("Hint")
+        self.check_btn = AnimatedButton("Check for updates", kind="ghost")
+        self.check_btn.clicked.connect(self.check_now)
+        self.status = QLabel("")
+        self.status.setObjectName("Hint")
+        layout.addWidget(version)
+        layout.addWidget(self.check_btn)
+        layout.addWidget(self.status)
+        layout.addStretch(1)
+
+    def check_now(self) -> None:
+        self.check_btn.setEnabled(False)
+        self.status.setText("Checking…")
+        self.status.setToolTip("")
+        self._worker = UpdateCheckWorker(self)
+        self._worker.checked.connect(self._on_checked)
+        self._worker.finished.connect(self._worker.deleteLater)
+        self._worker.start()
+
+    def _on_checked(self, result) -> None:
+        self.check_btn.setEnabled(True)
+        if result.status == "update" and result.info is not None:
+            self.status.setText(
+                f"Version {result.info.version} is ready — see the "
+                f"prompt in the corner."
+            )
+            window = self.window()
+            if hasattr(window, "show_update_pill"):
+                window.show_update_pill(result.info)
+        elif result.status == "current":
+            self.status.setText(
+                f"You're up to date — {result.detail or __version__} "
+                f"is the newest."
+            )
+        else:
+            self.status.setText(result.detail or "Couldn't check for updates.")
+            self.status.setToolTip(result.detail)
+
+
 def start_update_check(window: QWidget) -> UpdateCheckWorker:
-    """Kick off the background check; shows the pill if an update exists."""
+    """Kick off the silent launch check; shows the pill on a hit."""
 
     def _show(info) -> None:
-        window.update_pill = UpdatePill(info, window)
+        if hasattr(window, "show_update_pill"):
+            window.show_update_pill(info)
+        else:
+            window.update_pill = UpdatePill(info, window)
 
     worker = UpdateCheckWorker(window)
     worker.found.connect(_show)

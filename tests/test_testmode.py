@@ -97,7 +97,11 @@ class TestSecretTrigger:
     def test_logo_has_no_pointer_cursor(self, qapp, monkeypatch):
         from PySide6.QtCore import Qt
         from editsync import updater
-        monkeypatch.setattr(updater, "check_for_update", lambda: None)
+        monkeypatch.setattr(
+            updater,
+            "check_for_update_detailed",
+            lambda: updater.CheckResult("current", detail=updater.__version__),
+        )
         from editsync.gui.window import brand_logo
 
         logo = brand_logo(34)

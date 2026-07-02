@@ -135,12 +135,16 @@ def build_command(
     card_png: Optional[Path] = None,
     ffmpeg: str = "ffmpeg",
     tonemap: bool = True,
+    draft: bool = False,
 ) -> list[str]:
     """Assemble the full ffmpeg command for a timeline render.
 
     `tonemap` says whether the ffmpeg build has zscale/tonemap (see
     `ffmpeg_supports_tonemap`); HDR inputs get the full tone-map chain
     when it does, matrix-only conversion when it doesn't.
+
+    `draft` renders a fast rough preview (ultrafast x264, high CRF) —
+    used by the editor's draft-preview button, never for final output.
     """
     w, h = timeline.width, timeline.height
     rate = timeline.frame_rate
@@ -307,7 +311,9 @@ def build_command(
         "-filter_complex", ";".join(filters),
         "-map", "[vout]", "-map", "[aout]",
         "-t", f"{total:.4f}",
-        "-c:v", "libx264", "-preset", "medium", "-crf", "18",
+        "-c:v", "libx264",
+        "-preset", "ultrafast" if draft else "medium",
+        "-crf", "30" if draft else "18",
         "-colorspace", "bt709", "-color_primaries", "bt709",
         "-color_trc", "bt709", "-color_range", "tv",
         "-c:a", "aac", "-b:a", "192k",
@@ -324,6 +330,7 @@ def render(
     blur_amount: float = 50.0,
     card_png: Optional[Path] = None,
     progress: Optional[Callable[[int], None]] = None,
+    draft: bool = False,
 ) -> None:
     """Render the timeline to `output`, reporting percent via `progress`."""
     ffmpeg = require_tool("ffmpeg")
@@ -334,6 +341,7 @@ def render(
         card_png=card_png,
         ffmpeg=ffmpeg,
         tonemap=ffmpeg_supports_tonemap(ffmpeg),
+        draft=draft,
     )
     total_us = float(timeline.duration) * 1_000_000
     proc = subprocess.Popen(

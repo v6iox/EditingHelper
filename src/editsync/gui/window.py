@@ -35,7 +35,6 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .. import __version__
 from ..builder import BuildOptions
 from ..media import MediaFile, ProbeError, Role, require_tool
 from .recreational import RecreationalPage
@@ -136,8 +135,16 @@ class MainWindow(QWidget):
 
     def show_update_pill(self, info) -> None:
         """Show (or refresh) the bottom-left update prompt."""
-        if self.update_pill is not None:
-            self.update_pill.deleteLater()
+        pill = self.update_pill
+        if pill is not None:
+            if pill.install_running():
+                # never destroy a pill mid-download — its worker thread
+                # dies with it and Qt aborts the whole app
+                pill.show()
+                pill.raise_()
+                pill.reposition()
+                return
+            pill.deleteLater()
         self.update_pill = UpdatePill(info, self)
 
     def set_mode(self, mode: str) -> None:
@@ -843,6 +850,18 @@ class MainWindow(QWidget):
 
     def closeEvent(self, event) -> None:
         self._save_settings()
+        # A running update thread must never be destroyed with the window
+        # (Qt aborts the process). Hide first so quitting feels instant,
+        # ask the thread to stop, and give it a moment — its socket
+        # operations time out at 10 s and downloads poll for cancellation.
+        from .update import UpdateCheckWorker, UpdateInstallWorker
+
+        self.hide()
+        for worker_type in (UpdateCheckWorker, UpdateInstallWorker):
+            for thread in self.findChildren(worker_type):
+                if thread.isRunning():
+                    thread.requestInterruption()
+                    thread.wait(15000)
         super().closeEvent(event)
 
     # ------------------------------------------------------------ checks

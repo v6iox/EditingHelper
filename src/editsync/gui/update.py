@@ -27,7 +27,12 @@ class UpdateCheckWorker(QThread):
     found = Signal(object)  # updater.UpdateInfo — only when one exists
 
     def run(self) -> None:
-        result = updater.check_for_update_detailed()
+        try:
+            result = updater.check_for_update_detailed()
+        except Exception as exc:  # belt and braces: checked must always fire
+            result = updater.CheckResult(
+                "error", detail=f"Update check failed: {exc}"
+            )
         self.checked.emit(result)
         if result.status == "update" and result.info is not None:
             self.found.emit(result.info)
@@ -43,9 +48,13 @@ class UpdateInstallWorker(QThread):
 
     def run(self) -> None:
         try:
-            payload = updater.download_asset(self.info, self.progress.emit)
+            payload = updater.download_asset(
+                self.info, self.progress.emit, self.isInterruptionRequested
+            )
             updater.install_and_restart(payload)  # exits the process on success
         except updater.UpdateError as exc:
+            self.failed.emit(str(exc))
+        except Exception as exc:  # never die silently mid-install
             self.failed.emit(str(exc))
 
 
@@ -90,6 +99,11 @@ class UpdatePill(QFrame):
         parent = self.parentWidget()
         if parent is not None:
             self.move(MARGIN, parent.height() - self.height() - MARGIN)
+
+    def install_running(self) -> bool:
+        """True while a download/install is in flight — the pill (and its
+        worker thread) must not be destroyed then."""
+        return self._install_worker is not None and self._install_worker.isRunning()
 
     def _start_install(self) -> None:
         self.update_btn.setEnabled(False)
@@ -141,6 +155,7 @@ class UpdateFooter(QWidget):
         self.status.setToolTip("")
         self._worker = UpdateCheckWorker(self)
         self._worker.checked.connect(self._on_checked)
+        self._worker.finished.connect(self._worker.deleteLater)
         self._worker.start()
 
     def _on_checked(self, result) -> None:

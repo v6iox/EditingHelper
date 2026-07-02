@@ -157,14 +157,47 @@ class TestDetailedCheck:
 
 
 class TestSSLContext:
-    def test_context_uses_certifi_bundle(self):
+    def test_context_combines_platform_and_certifi_stores(self):
         import certifi
         import ssl
 
         context = updater._ssl_context()
         assert isinstance(context, ssl.SSLContext)
-        # certifi must be importable — the packaged app has no other CAs
-        assert certifi.where()
+        assert certifi.where()  # the packaged app has no other CAs
+        # certifi's CAs really are loaded (frozen macOS has zero without it)
+        assert context.cert_store_stats()["x509_ca"] > 0
+
+    def test_truncated_response_never_raises(self):
+        """IncompleteRead subclasses neither OSError nor ValueError —
+        it must still become a CheckResult, or the footer wedges at
+        'Checking…' forever (confirmed by the adversarial review)."""
+        import http.client
+
+        with mock.patch.object(
+            updater.urllib.request,
+            "urlopen",
+            side_effect=http.client.IncompleteRead(b"partial"),
+        ):
+            result = updater.check_for_update_detailed()
+        assert result.status == "error"
+        assert "interrupted" in result.detail
+
+    def test_download_can_be_cancelled(self, tmp_path):
+        info = updater.UpdateInfo("9.9.9", "v9.9.9", "http://x/asset", "p")
+        response = mock.MagicMock()
+        response.headers = {"Content-Length": "1000000"}
+        response.read.return_value = b"x" * 1024
+        response.__enter__ = lambda s: s
+        response.__exit__ = mock.MagicMock(return_value=False)
+        with mock.patch.object(
+            updater.urllib.request, "urlopen", return_value=response
+        ):
+            try:
+                updater.download_asset(info, cancelled=lambda: True)
+            except updater.UpdateError as exc:
+                assert "cancelled" in str(exc).lower()
+            else:
+                raise AssertionError("cancellation must raise UpdateError")
 
     def test_requests_pass_the_context(self):
         """Both network calls must send our verified SSL context —

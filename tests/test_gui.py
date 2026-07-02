@@ -513,3 +513,51 @@ class TestUpdateFooter:
         assert win.update_pill is not None
         assert "9.9.9" in win.update_pill.label.text()
         assert "9.9.9" in footer.status.text()
+
+
+class TestUpdatePillLifecycle:
+    """Fixes from the adversarial review: a pill mid-download must never
+    be destroyed, and a dying check must still report."""
+
+    def test_pill_not_replaced_while_installing(self, qapp, monkeypatch):
+        from unittest import mock
+
+        from editsync import updater
+        from editsync.gui.update import UpdatePill
+
+        win = MainWindow()
+        win.resize(1000, 700)
+        info = updater.UpdateInfo("9.9.9", "v9.9.9", "url", "page")
+        win.show_update_pill(info)
+        first = win.update_pill
+        assert first is not None
+
+        # simulate a download in flight
+        first._install_worker = mock.MagicMock()
+        first._install_worker.isRunning.return_value = True
+        assert first.install_running()
+
+        win.show_update_pill(info)
+        assert win.update_pill is first  # untouched, not replaced
+
+        # once the install worker is done, replacement is allowed again
+        first._install_worker.isRunning.return_value = False
+        win.show_update_pill(info)
+        assert win.update_pill is not first
+
+    def test_check_worker_survives_a_raising_check(self, qapp, monkeypatch):
+        from editsync.gui import update as update_mod
+
+        def boom():
+            raise RuntimeError("exploded mid-check")
+
+        monkeypatch.setattr(
+            update_mod.updater, "check_for_update_detailed", boom
+        )
+        footer = update_mod.UpdateFooter()
+        footer.check_btn.click()
+        footer._worker.wait(5000)
+        QApplication.processEvents()
+        # the footer recovered: button re-enabled, error surfaced
+        assert footer.check_btn.isEnabled()
+        assert "exploded" in footer.status.text()

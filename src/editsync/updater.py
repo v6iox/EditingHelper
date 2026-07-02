@@ -65,15 +65,20 @@ def _ssl_context() -> ssl.SSLContext:
 
     The packaged app (PyInstaller) ships Python's ssl module with NO
     certificate store — macOS never exposes its keychain to OpenSSL —
-    so a bare urlopen() fails certificate verification on every machine
-    and the updater silently did nothing. certifi bundles the CAs; fall
-    back to the system default outside the packaged app."""
+    so a bare urlopen() failed certificate verification on every machine
+    and the updater silently did nothing.
+
+    Start from the platform defaults (a Windows machine's store includes
+    corporate TLS-inspection roots that certifi doesn't have) and ADD
+    certifi's bundle on top, so both worlds verify."""
+    context = ssl.create_default_context()
     try:
         import certifi
 
-        return ssl.create_default_context(cafile=certifi.where())
+        context.load_verify_locations(cafile=certifi.where())
     except Exception:
-        return ssl.create_default_context()
+        pass  # no certifi: the platform store alone (dev machines) works
+    return context
 
 
 def parse_version(text: str) -> tuple[int, ...]:
@@ -162,6 +167,14 @@ def check_for_update_detailed() -> CheckResult:
         return CheckResult(
             "error", detail="Couldn't reach GitHub — check your internet connection."
         )
+    except Exception:
+        # e.g. http.client.IncompleteRead when the response is truncated
+        # mid-body — it subclasses neither OSError nor ValueError. The
+        # "never raises" promise above must hold or the footer wedges.
+        return CheckResult(
+            "error",
+            detail="The connection to GitHub was interrupted — try again.",
+        )
 
     tag = release.get("tag_name", "")
     if not is_newer(tag):
@@ -193,8 +206,15 @@ def check_for_update() -> Optional[UpdateInfo]:
     return check_for_update_detailed().info
 
 
-def download_asset(info: UpdateInfo, progress=lambda pct: None) -> Path:
-    """Download the platform asset to a temp file, reporting 0-100."""
+def download_asset(
+    info: UpdateInfo,
+    progress=lambda pct: None,
+    cancelled=lambda: False,
+) -> Path:
+    """Download the platform asset to a temp file, reporting 0-100.
+
+    `cancelled` is polled between chunks so the app can abandon a
+    download cleanly (e.g. the user quits) instead of being killed."""
     target = Path(tempfile.mkdtemp(prefix="editsync-update-")) / platform_asset_name()
     try:
         with urllib.request.urlopen(
@@ -205,6 +225,8 @@ def download_asset(info: UpdateInfo, progress=lambda pct: None) -> Path:
             total = int(response.headers.get("Content-Length") or 0)
             done = 0
             while True:
+                if cancelled():
+                    raise UpdateError("Update cancelled.")
                 chunk = response.read(256 * 1024)
                 if not chunk:
                     break

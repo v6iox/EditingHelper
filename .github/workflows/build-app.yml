@@ -1,0 +1,75 @@
+name: Build desktop app
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    tags: ["v*"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Install and test
+        run: |
+          pip install -e . pytest
+          pytest -q
+
+  macos:
+    needs: test
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build .app and .dmg
+        run: ./packaging/build_macos.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: EditSync-macOS
+          path: dist/EditSync.dmg
+
+  windows:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build .exe bundle
+        run: .\packaging\build_windows.ps1
+        shell: pwsh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: EditSync-Windows
+          path: dist/EditSync-windows.zip
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [macos, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - uses: actions/checkout@v4
+        with:
+          path: repo
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: EditSync ${{ github.ref_name }}
+          body_path: repo/.github/release-body.md
+          generate_release_notes: true
+          files: |
+            artifacts/EditSync-macOS/EditSync.dmg
+            artifacts/EditSync-Windows/EditSync-windows.zip

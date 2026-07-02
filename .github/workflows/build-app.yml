@@ -34,7 +34,53 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      # Signing/notarization activate only when the secrets exist
+      # (docs/SIGNING.md); without them the build is unsigned, as before.
+      - name: Import signing certificate
+        env:
+          CERT_B64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          if [ -z "$CERT_B64" ]; then
+            echo "No signing certificate configured; building unsigned."
+            exit 0
+          fi
+          echo "$CERT_B64" | base64 --decode > /tmp/cert.p12
+          # Normalize the p12 to classic ciphers (SHA1 MAC + 3DES bags):
+          # OpenSSL 3 exports use PBES2/AES, which macOS `security import`
+          # rejects with a misleading "MAC verification failed" error.
+          openssl pkcs12 -in /tmp/cert.p12 -passin env:CERT_PASSWORD \
+              -nodes -out /tmp/bundle.pem 2>/dev/null \
+            || openssl pkcs12 -legacy -in /tmp/cert.p12 \
+              -passin env:CERT_PASSWORD -nodes -out /tmp/bundle.pem
+          openssl pkcs12 -export -in /tmp/bundle.pem \
+            -passout env:CERT_PASSWORD \
+            -certpbe PBE-SHA1-3DES -keypbe PBE-SHA1-3DES -macalg sha1 \
+            -name "Developer ID Application" -out /tmp/cert_compat.p12
+          KEYCHAIN_PASS="$(uuidgen)"
+          security create-keychain -p "$KEYCHAIN_PASS" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PASS" build.keychain
+          security set-keychain-settings -t 3600 build.keychain
+          security import /tmp/cert_compat.p12 -k build.keychain \
+            -P "$CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: \
+            -s -k "$KEYCHAIN_PASS" build.keychain
+          rm -f /tmp/cert.p12 /tmp/bundle.pem /tmp/cert_compat.p12
+          IDENTITY="$(security find-identity -v -p codesigning build.keychain \
+            | grep 'Developer ID Application' | head -1 \
+            | sed -E 's/.*"(.+)"$/\1/')"
+          if [ -z "$IDENTITY" ]; then
+            echo "Certificate imported but no 'Developer ID Application' identity found." >&2
+            exit 1
+          fi
+          echo "Using identity: $IDENTITY"
+          echo "MACOS_SIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
       - name: Build .app and .dmg
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
         run: ./packaging/build_macos.sh
       - uses: actions/upload-artifact@v4
         with:

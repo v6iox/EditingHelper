@@ -40,15 +40,53 @@ iconutil -c icns "$ICONSET" -o packaging/icon.icns
 echo "==> Building EditSync.app"
 pyinstaller --noconfirm packaging/editsync.spec
 
+# --- code signing (runs only when MACOS_SIGN_IDENTITY is set) -----------
+# See docs/SIGNING.md for how to provision the certificate and secrets.
+if [ -n "${MACOS_SIGN_IDENTITY:-}" ]; then
+    echo "==> Signing EditSync.app with: $MACOS_SIGN_IDENTITY"
+    # sign every nested Mach-O binary first (dylibs, .so modules, ffmpeg),
+    # then the app bundle itself with hardened runtime + entitlements
+    find dist/EditSync.app/Contents -type f \
+        \( -name "*.dylib" -o -name "*.so" -o -perm -u+x \) -print0 |
+    while IFS= read -r -d '' bin; do
+        if file -b "$bin" | grep -q "Mach-O"; then
+            codesign --force --options runtime --timestamp \
+                --sign "$MACOS_SIGN_IDENTITY" "$bin"
+        fi
+    done
+    codesign --force --options runtime --timestamp \
+        --entitlements packaging/entitlements.plist \
+        --sign "$MACOS_SIGN_IDENTITY" dist/EditSync.app
+    codesign --verify --deep --strict dist/EditSync.app
+    echo "==> Signature verified"
+fi
+
 echo "==> Creating DMG"
 rm -f dist/EditSync.dmg
 hdiutil create -volname "EditSync" -srcfolder dist/EditSync.app \
     -ov -format UDZO dist/EditSync.dmg
+if [ -n "${MACOS_SIGN_IDENTITY:-}" ]; then
+    codesign --force --timestamp --sign "$MACOS_SIGN_IDENTITY" dist/EditSync.dmg
+fi
+
+# --- notarization (runs only when Apple credentials are set) ------------
+if [ -n "${APPLE_ID:-}" ] && [ -n "${APPLE_TEAM_ID:-}" ] && [ -n "${APPLE_APP_PASSWORD:-}" ]; then
+    echo "==> Notarizing DMG (this waits for Apple, usually 1-5 minutes)"
+    xcrun notarytool submit dist/EditSync.dmg \
+        --apple-id "$APPLE_ID" \
+        --team-id "$APPLE_TEAM_ID" \
+        --password "$APPLE_APP_PASSWORD" \
+        --wait
+    xcrun stapler staple dist/EditSync.dmg
+    echo "==> Notarized and stapled"
+fi
 
 echo ""
 echo "Done:"
 echo "  dist/EditSync.app  — the application"
 echo "  dist/EditSync.dmg  — the downloadable disk image"
-echo ""
-echo "Note: the app is unsigned. On first launch users should right-click"
-echo "the app and choose Open (see docs/APP_GUIDE.md)."
+if [ -z "${MACOS_SIGN_IDENTITY:-}" ]; then
+    echo ""
+    echo "Note: built UNSIGNED (no MACOS_SIGN_IDENTITY set). On first launch"
+    echo "users should right-click the app and choose Open (docs/APP_GUIDE.md)."
+fi

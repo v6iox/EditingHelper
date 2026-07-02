@@ -10,7 +10,7 @@ portability to other editors.
 (Windows) from the [Releases page](../../releases/latest). No setup —
 ffmpeg is bundled. Mac first launch: right-click → Open (unsigned app).
 
-Comes in two flavors:
+Comes in three flavors:
 
 - **The EditSync app** — a downloadable black-and-white desktop app:
   drag in footage, pick options in plain language, press one button.
@@ -19,6 +19,9 @@ Comes in two flavors:
   releases are built (GitHub Actions produces the macOS `.dmg` and
   Windows `.zip`; `./packaging/build_macos.sh` builds locally).
 - **The `editsync` CLI** — the same engine, scriptable (documented below).
+- **EditSync for iPhone** (`ios/`) — same sync brain, mobile ending:
+  live preview of the finished edit, one tap to save to the camera
+  roll. See [docs/IOS_GUIDE.md](docs/IOS_GUIDE.md).
 
 ## What it does
 
@@ -102,6 +105,10 @@ editsync sync ./footage -o myvideo.fcpxml --search-window 120
   `fill` (scale to fill), `pip-left` / `pip-right` picture-in-picture.
 - **Minimal or one-lane-per-clip layering** — overlapping overlays never
   collide; `--lane-per-clip` gives every clip its own layer if you prefer.
+- **Finished video** — `--render` composites everything (overlays,
+  blur, title fade, ducked audio, looped music) into one final MP4 with
+  ffmpeg; also a "Finished video" checkbox in the app with a Watch
+  button. No editor required.
 - **Opening title cards** — `--title "Front Bumper Removal"
   --title-description "2024 Toyota GR86"` puts a white card with the
   title and description at the start, fading out over `--title-fade`

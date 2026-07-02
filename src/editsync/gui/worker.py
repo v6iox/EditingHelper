@@ -46,7 +46,7 @@ class ProbeWorker(QThread):
 class SyncJob:
     media: list[MediaFile]
     options: BuildOptions
-    formats: list[str]
+    formats: list[str]  # timeline formats; "video" renders a finished MP4
     output_dir: Path
     music: MediaFile | None = None
     write_report: bool = True
@@ -56,6 +56,7 @@ class SyncJob:
 class SyncOutcome:
     result: BuildResult
     written: list[Path] = field(default_factory=list)
+    video: Path | None = None  # the finished MP4, when rendered
 
 
 class SyncWorker(QThread):
@@ -92,10 +93,38 @@ class SyncWorker(QThread):
                 " ", "_"
             )
             self.progress.emit("Writing timeline files...")
-            for fmt in self.job.formats:
+            video: Path | None = None
+            timeline_formats = [f for f in self.job.formats if f != "video"]
+            for fmt in timeline_formats:
                 out = base.with_suffix(exporters.default_extension(fmt))
                 exporters.export(fmt, result.timeline, out)
                 written.append(out)
+            if "video" in self.job.formats:
+                from ..renderer import render as render_video
+                from ..titlecard import render_card_png
+
+                card_png = None
+                if result.timeline.title_card is not None:
+                    card_png = base.resolve().with_suffix(".title_card.png")
+                    render_card_png(
+                        result.timeline.title_card,
+                        result.timeline.width,
+                        result.timeline.height,
+                        card_png,
+                    )
+                video = base.with_suffix(".mp4")
+                self.progress.emit("Rendering your video... 0%")
+                render_video(
+                    result.timeline,
+                    video,
+                    overlay_style=self.job.options.overlay_style,
+                    blur_amount=self.job.options.blur_amount,
+                    card_png=card_png,
+                    progress=lambda pct: self.progress.emit(
+                        f"Rendering your video... {pct}%"
+                    ),
+                )
+                written.append(video)
             if (
                 result.timeline.title_card is not None
                 and "premiere" in self.job.formats
@@ -109,6 +138,8 @@ class SyncWorker(QThread):
                 write_json_report(result, report_path)
                 written.append(report_path)
 
-            self.finished_ok.emit(SyncOutcome(result=result, written=written))
+            self.finished_ok.emit(
+                SyncOutcome(result=result, written=written, video=video)
+            )
         except Exception as exc:  # surfaced in the UI, never a crash
             self.failed.emit(str(exc))

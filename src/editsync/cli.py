@@ -132,6 +132,38 @@ def cmd_sync(args) -> int:
         out = out_base if out_base.suffix and len(formats) == 1 else out_base.with_suffix(ext)
         exporters.export(fmt, result.timeline, out)
         print(f"Wrote {fmt}: {out}")
+    if args.render:
+        from .renderer import render as render_video
+        from .titlecard import render_card_png
+
+        card_png = None
+        if result.timeline.title_card is not None:
+            card_png = out_base.resolve().with_suffix(".title_card.png")
+            render_card_png(
+                result.timeline.title_card,
+                result.timeline.width,
+                result.timeline.height,
+                card_png,
+            )
+        mp4 = out_base.with_suffix(".mp4")
+        print(f"Rendering finished video to {mp4} ...")
+        last = {"pct": -1}
+
+        def _show(pct: int) -> None:
+            if pct >= last["pct"] + 10 or pct == 100:
+                last["pct"] = pct
+                print(f"  {pct}%")
+
+        render_video(
+            result.timeline,
+            mp4,
+            overlay_style=args.overlay_style,
+            blur_amount=args.blur_amount,
+            card_png=card_png,
+            progress=_show,
+        )
+        print(f"Wrote video: {mp4}")
+
     if result.timeline.title_card is not None and "premiere" in formats:
         print(
             "note: the opening title card is included in the Final Cut Pro "
@@ -205,6 +237,12 @@ def main(argv: list[str] | None = None) -> int:
     p_sync = sub.add_parser("sync", help="sync footage and export a timeline")
     _add_common_input_args(p_sync)
     p_sync.add_argument("-o", "--output", help="output file path (extension optional)")
+    p_sync.add_argument(
+        "--render",
+        action="store_true",
+        help="also render the finished video to an .mp4 next to the output "
+        "(no editing software needed)",
+    )
     p_sync.add_argument(
         "-f",
         "--format",

@@ -315,9 +315,15 @@ class MainWindow(QWidget):
         self.fmt_fcp.setChecked(True)
         self.fmt_premiere = QCheckBox("Premiere Pro")
         self.fmt_otio = QCheckBox("DaVinci Resolve / OTIO")
+        self.fmt_video = QCheckBox("Finished video (MP4)")
+        self.fmt_video.setToolTip(
+            "Renders the whole synced edit to one video file - no editing "
+            "software needed. Takes a few minutes."
+        )
         fmt_row.addWidget(self.fmt_fcp)
         fmt_row.addWidget(self.fmt_premiere)
         fmt_row.addWidget(self.fmt_otio)
+        fmt_row.addWidget(self.fmt_video)
         fmt_row.addStretch(1)
         opt.addLayout(fmt_row)
 
@@ -412,6 +418,9 @@ class MainWindow(QWidget):
         layout.addWidget(self.done_details, stretch=1)
 
         buttons = QHBoxLayout()
+        self.watch_btn = AnimatedButton("Watch the video", kind="primary")
+        self.watch_btn.clicked.connect(self._watch_video)
+        self.watch_btn.hide()
         self.reveal_btn = AnimatedButton("Show the files", kind="primary")
         self.reveal_btn.clicked.connect(self._reveal_output)
         again = AnimatedButton("Start over")
@@ -419,6 +428,7 @@ class MainWindow(QWidget):
         buttons.addStretch(1)
         buttons.addWidget(again)
         buttons.addWidget(self.reveal_btn)
+        buttons.addWidget(self.watch_btn)
         layout.addLayout(buttons)
         return page
 
@@ -566,6 +576,8 @@ class MainWindow(QWidget):
             formats.append("premiere")
         if self.fmt_otio.isChecked():
             formats.append("otio")
+        if self.fmt_video.isChecked():
+            formats.append("video")
         return formats
 
     def _start_sync(self) -> None:
@@ -616,6 +628,10 @@ class MainWindow(QWidget):
 
     def _on_sync_done(self, outcome: SyncOutcome) -> None:
         result = outcome.result
+        self._video_path = outcome.video
+        self.watch_btn.setVisible(outcome.video is not None)
+        if outcome.video is not None:
+            self.reveal_btn.setText("Show the files")
         placed = [m for m in result.matches if m.placed]
         skipped = [m for m in result.matches if not m.placed]
 
@@ -650,6 +666,12 @@ class MainWindow(QWidget):
         lines.append("")
         lines.append("Files created:")
         lines += [f"  {p.name}" for p in outcome.written]
+        if outcome.video is not None:
+            lines.append("")
+            lines.append(
+                "Your finished video is ready - press 'Watch the video', or "
+                "share the .mp4 anywhere. No editing software needed."
+            )
         if any(p.suffix == ".fcpxml" for p in outcome.written):
             lines.append("")
             lines.append(
@@ -662,6 +684,10 @@ class MainWindow(QWidget):
     def _on_sync_failed(self, message: str) -> None:
         self._go(self.setup_page)
         QMessageBox.critical(self, "Something went wrong", message)
+
+    def _watch_video(self) -> None:
+        if getattr(self, "_video_path", None):
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(self._video_path)))
 
     def _reveal_output(self) -> None:
         if self._output_dir:
@@ -684,6 +710,7 @@ class MainWindow(QWidget):
         self.fmt_fcp.setChecked(s.value("fmt_fcp", True, type=bool))
         self.fmt_premiere.setChecked(s.value("fmt_premiere", False, type=bool))
         self.fmt_otio.setChecked(s.value("fmt_otio", False, type=bool))
+        self.fmt_video.setChecked(s.value("fmt_video", False, type=bool))
         self.lane_per_clip.setChecked(s.value("lane_per_clip", False, type=bool))
         self.music_enable.setChecked(s.value("music_enable", False, type=bool))
         self.music_vol_slider.setValue(s.value("music_db", -22, type=int))
@@ -708,6 +735,7 @@ class MainWindow(QWidget):
         s.setValue("fmt_fcp", self.fmt_fcp.isChecked())
         s.setValue("fmt_premiere", self.fmt_premiere.isChecked())
         s.setValue("fmt_otio", self.fmt_otio.isChecked())
+        s.setValue("fmt_video", self.fmt_video.isChecked())
         s.setValue("lane_per_clip", self.lane_per_clip.isChecked())
         s.setValue("music_enable", self.music_enable.isChecked())
         s.setValue("music_db", self.music_vol_slider.value())

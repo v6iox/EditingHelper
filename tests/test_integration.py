@@ -46,10 +46,16 @@ def write_video(
     width: int,
     height: int,
     creation_time: str,
+    hdr: bool = False,
 ) -> None:
     wav = path.with_suffix(".wav")
     _write_wav(wav, audio)
     duration = len(audio) / SR
+    color = (
+        ["-color_primaries", "bt2020", "-color_trc", "arib-std-b67",
+         "-colorspace", "bt2020nc"]
+        if hdr else []
+    )
     subprocess.run(
         [
             "ffmpeg", "-v", "error", "-y",
@@ -57,6 +63,7 @@ def write_video(
             "-i", f"color=c=gray:size={width}x{height}:rate=30:duration={duration:.3f}",
             "-i", str(wav),
             "-c:v", "libx264", "-preset", "ultrafast", "-crf", "40",
+            *color,
             "-c:a", "aac", "-shortest",
             "-metadata", f"creation_time={creation_time}",
             str(path),

@@ -7,6 +7,11 @@
   card fading, audio ducked, music looped — no editing software needed.
   A "Watch the video" button opens it straight from the results screen.
   CLI: `--render`.
+- **Hidden test mode**: triple-click the logo (no visual hint) to open
+  a secret menu that generates a complete demo shoot — main camera
+  (optionally split into two files), glasses clips with genuinely
+  overlapping audio, and a song — and loads it, so every feature can be
+  demonstrated without real footage. CLI: `editsync demo`.
 - **EditSync for iPhone** (`ios/`): a native SwiftUI app with the same
   sync engine (ported to Apple's Accelerate framework), same options,
   and a mobile-first ending — the finished edit plays instantly in a

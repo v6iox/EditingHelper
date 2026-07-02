@@ -38,6 +38,7 @@ from PySide6.QtWidgets import (
 from .. import __version__
 from ..builder import BuildOptions
 from ..media import MediaFile, ProbeError, Role, require_tool
+from .testmode import SecretTrigger, TestModeDialog
 from .title_picker import TitleStylePicker
 from .update import start_update_check
 from .widgets import AnimatedButton, DropZone, FileRow, Segmented, section_label
@@ -122,6 +123,9 @@ class MainWindow(QWidget):
         logo = brand_logo(34)
         if logo is not None:
             layout.addWidget(logo)
+            # hidden test mode: triple-click the logo (no cursor hint)
+            self._secret = SecretTrigger(logo, self)
+            self._secret.triggered.connect(self._open_test_mode)
         header = QHBoxLayout()
         title = QLabel("EDITSYNC")
         title.setObjectName("Title")
@@ -470,6 +474,14 @@ class MainWindow(QWidget):
         self.blur_label.setEnabled(is_blur)
         self.blur_slider.setEnabled(is_blur)
         self.blur_value.setEnabled(is_blur)
+
+    def _open_test_mode(self) -> None:
+        dialog = TestModeDialog(self)
+        if dialog.exec() and dialog.paths:
+            if dialog.fill_sample_title and not self.title_edit.text().strip():
+                self.title_edit.setText("Front Bumper Removal")
+                self.title_desc_edit.setText("2024 Toyota GR86")
+            self._add_paths(dialog.paths)
 
     def _refresh_title_previews(self) -> None:
         self.title_style_picker.update_sample(

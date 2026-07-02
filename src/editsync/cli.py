@@ -180,6 +180,30 @@ def cmd_sync(args) -> int:
     return 0
 
 
+def cmd_demo(args) -> int:
+    from .testmode import generate_demo_shoot
+
+    dest = Path(args.output)
+    shoot = generate_demo_shoot(
+        dest,
+        split_recording=not args.no_split,
+        include_music=not args.no_music,
+        progress=lambda msg: print(msg),
+    )
+    print()
+    for f in shoot.files:
+        print(f"  {f}")
+    print()
+    print("Try it:")
+    music = f" --music {shoot.music}" if shoot.music else ""
+    print(
+        f"  editsync sync {dest} -o demo --render "
+        f'--title "Front Bumper Removal" '
+        f'--title-description "2024 Toyota GR86"{music}'
+    )
+    return 0
+
+
 def cmd_probe(args) -> int:
     media = _classified(args)
     print(probe_table(media))
@@ -360,6 +384,22 @@ def main(argv: list[str] | None = None) -> int:
         "-j", "--jobs", type=int, default=4, help="parallel audio extraction jobs"
     )
     p_sync.set_defaults(func=cmd_sync)
+
+    p_demo = sub.add_parser(
+        "demo", help="generate a demo shoot with overlapping audio for testing"
+    )
+    p_demo.add_argument(
+        "-o", "--output", default="editsync-demo",
+        help="directory for the generated footage (default: ./editsync-demo)",
+    )
+    p_demo.add_argument(
+        "--no-split", action="store_true",
+        help="keep the main recording as one file instead of two",
+    )
+    p_demo.add_argument(
+        "--no-music", action="store_true", help="skip the demo music file"
+    )
+    p_demo.set_defaults(func=cmd_demo)
 
     p_probe = sub.add_parser("probe", help="show how files would be classified")
     _add_common_input_args(p_probe)

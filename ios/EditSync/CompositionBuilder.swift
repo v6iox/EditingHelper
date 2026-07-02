@@ -165,6 +165,7 @@ enum CompositionBuilder {
         videoComposition.renderSize = renderSize
         videoComposition.frameDuration = frameDuration
         videoComposition.instructions = [instruction]
+        applySDRColorSpace(videoComposition)
 
         let audioMix = AVMutableAudioMix()
         audioMix.inputParameters = mixParams
@@ -173,6 +174,7 @@ enum CompositionBuilder {
         exportComposition.renderSize = renderSize
         exportComposition.frameDuration = frameDuration
         exportComposition.instructions = [instruction]
+        applySDRColorSpace(exportComposition)
         if let title = plan.title {
             exportComposition.animationTool = titleAnimationTool(
                 title: title, renderSize: renderSize)
@@ -187,6 +189,16 @@ enum CompositionBuilder {
     }
 
     // MARK: helpers
+
+    /// Composite in SDR BT.709. Meta glasses record HDR (HLG/BT.2020);
+    /// without an explicit SDR working space AVFoundation mixes those
+    /// frames with the SDR main camera unconverted and the picture goes
+    /// oversaturated red wherever a glasses clip shows.
+    private static func applySDRColorSpace(_ vc: AVMutableVideoComposition) {
+        vc.colorPrimaries = AVVideoColorPrimaries_ITU_R_709_2
+        vc.colorTransferFunction = AVVideoTransferFunction_ITU_R_709_2
+        vc.colorYCbCrMatrix = AVVideoYCbCrMatrix_ITU_R_709_2
+    }
 
     private static func applyDuck(
         _ params: AVMutableAudioMixInputParameters,

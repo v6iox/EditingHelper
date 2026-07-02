@@ -23,6 +23,9 @@ def make_media():
         creation_time: dt.datetime | None = None,
         rotation: int = 0,
         has_audio: bool = True,
+        color_space: str = "",
+        color_primaries: str = "",
+        color_transfer: str = "",
     ) -> MediaFile:
         return MediaFile(
             path=Path(f"/media/{name}").resolve(),
@@ -36,6 +39,9 @@ def make_media():
             has_audio=has_audio,
             creation_time=creation_time,
             role=role,
+            color_space=color_space,
+            color_primaries=color_primaries,
+            color_transfer=color_transfer,
         )
 
     return _make

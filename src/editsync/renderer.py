@@ -12,6 +12,13 @@ involved. Everything the timeline describes is composited:
   looping background music at its set level (optionally muted under
   overlays) — all with the same fade ramps the FCPXML export encodes
 
+Color: everything is composited in SDR BT.709. HDR sources (Meta glasses
+record HLG/BT.2020 by default) are tone-mapped down first — without that
+their frames get read as if they were BT.709 and the whole image goes
+oversaturated red. SDR sources with a different YUV matrix are converted
+by the scaler, and the output file is tagged bt709 so players don't
+guess.
+
 Progress is reported as 0-100 via ffmpeg's -progress output.
 """
 
@@ -23,10 +30,47 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Callable, Optional
 
-from .media import ProbeError, require_tool
+from .media import MediaFile, ProbeError, require_tool
 from .timeline import DuckRegion, Timeline, TimelineClip
 
 FADE = 0.25  # seconds; matches the exporters' duck/blur fade
+
+# zscale/tonemap chain that converts an HDR frame (HLG or PQ, BT.2020)
+# to SDR BT.709 before it enters the composite.
+TONE_MAP = (
+    "zscale=transfer=linear:npl=100,format=gbrpf32le,"
+    "zscale=primaries=bt709,tonemap=hable:desat=0,"
+    "zscale=transfer=bt709:matrix=bt709:range=tv,format=yuv420p"
+)
+
+# every scaler invocation converts the YUV matrix to bt709 so SDR clips
+# tagged bt601/bt2020 (or already tone-mapped frames) land in one space
+_MATRIX = ":in_color_matrix=auto:out_color_matrix=bt709"
+
+_filter_support: dict[str, bool] = {}
+
+
+def ffmpeg_supports_tonemap(ffmpeg: str) -> bool:
+    """Whether this ffmpeg build has the zscale + tonemap filters."""
+    if ffmpeg not in _filter_support:
+        try:
+            out = subprocess.run(
+                [ffmpeg, "-hide_banner", "-filters"],
+                capture_output=True, text=True, timeout=30,
+            ).stdout
+        except (OSError, subprocess.SubprocessError):
+            out = ""
+        _filter_support[ffmpeg] = " zscale " in out and " tonemap " in out
+    return _filter_support[ffmpeg]
+
+
+def _hdr_prefix(media: MediaFile, tonemap: bool) -> str:
+    """Per-input filter prefix: tone-map HDR sources down to SDR."""
+    if media.is_hdr and tonemap:
+        return TONE_MAP + ","
+    # without zscale the scaler's matrix conversion still fixes the worst
+    # of the shift (bt2020 YUV read as bt709); transfer stays approximate
+    return ""
 
 
 def db_to_gain(db: float) -> float:
@@ -63,16 +107,16 @@ def _overlay_scale(style: str, w: int, h: int) -> str:
     """Scale filter for an overlay clip per framing style."""
     if style == "fill":
         return (
-            f"scale={w}:{h}:force_original_aspect_ratio=increase,"
+            f"scale={w}:{h}:force_original_aspect_ratio=increase{_MATRIX},"
             f"crop={w}:{h}"
         )
     if style in ("pip-left", "pip-right"):
         return (
             f"scale={round(w * 0.4)}:{round(h * 0.62)}:"
-            f"force_original_aspect_ratio=decrease"
+            f"force_original_aspect_ratio=decrease{_MATRIX}"
         )
     # center / blur-bg: fit inside the frame
-    return f"scale={w}:{h}:force_original_aspect_ratio=decrease"
+    return f"scale={w}:{h}:force_original_aspect_ratio=decrease{_MATRIX}"
 
 
 def _overlay_position(style: str, w: int) -> tuple[str, str]:
@@ -90,8 +134,14 @@ def build_command(
     blur_amount: float = 50.0,
     card_png: Optional[Path] = None,
     ffmpeg: str = "ffmpeg",
+    tonemap: bool = True,
 ) -> list[str]:
-    """Assemble the full ffmpeg command for a timeline render."""
+    """Assemble the full ffmpeg command for a timeline render.
+
+    `tonemap` says whether the ffmpeg build has zscale/tonemap (see
+    `ffmpeg_supports_tonemap`); HDR inputs get the full tone-map chain
+    when it does, matrix-only conversion when it doesn't.
+    """
     w, h = timeline.width, timeline.height
     rate = timeline.frame_rate
     fps = f"{rate.numerator}/{rate.denominator}"
@@ -121,7 +171,7 @@ def build_command(
         return idx
 
     norm = (
-        f"scale={w}:{h}:force_original_aspect_ratio=decrease,"
+        f"scale={w}:{h}:force_original_aspect_ratio=decrease{_MATRIX},"
         f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,fps={fps},setsar=1"
     )
 
@@ -143,7 +193,7 @@ def build_command(
         ss, dur = float(clip.source_start), float(clip.duration)
         filters.append(
             f"[{idx}:v]trim={ss:.4f}:{ss + dur:.4f},setpts=PTS-STARTPTS,"
-            f"{norm}[pv{i}]"
+            f"{_hdr_prefix(clip.media, tonemap)}{norm}[pv{i}]"
         )
         if clip.media.has_audio:
             filters.append(
@@ -186,6 +236,7 @@ def build_command(
         tl = float(clip.timeline_start)
         filters.append(
             f"[{idx}:v]trim={ss:.4f}:{ss + dur:.4f},setpts=PTS-STARTPTS,"
+            f"{_hdr_prefix(clip.media, tonemap)}"
             f"{_overlay_scale(overlay_style, w, h)},fps={fps},setsar=1,"
             f"setpts=PTS+{tl:.4f}/TB[ov{k}]"
         )
@@ -257,6 +308,8 @@ def build_command(
         "-map", "[vout]", "-map", "[aout]",
         "-t", f"{total:.4f}",
         "-c:v", "libx264", "-preset", "medium", "-crf", "18",
+        "-colorspace", "bt709", "-color_primaries", "bt709",
+        "-color_trc", "bt709", "-color_range", "tv",
         "-c:a", "aac", "-b:a", "192k",
         "-movflags", "+faststart",
         str(output),
@@ -280,6 +333,7 @@ def render(
         blur_amount=blur_amount,
         card_png=card_png,
         ffmpeg=ffmpeg,
+        tonemap=ffmpeg_supports_tonemap(ffmpeg),
     )
     total_us = float(timeline.duration) * 1_000_000
     proc = subprocess.Popen(

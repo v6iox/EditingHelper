@@ -55,6 +55,9 @@ class MediaFile:
     creation_time: Optional[_dt.datetime] = None
     make: str = ""
     model: str = ""
+    color_space: str = ""  # e.g. "bt709", "bt2020nc" (ffprobe color_space)
+    color_primaries: str = ""  # e.g. "bt709", "bt2020"
+    color_transfer: str = ""  # e.g. "bt709", "arib-std-b67" (HLG), "smpte2084" (PQ)
     role: Role = Role.UNKNOWN
     role_reason: str = ""
     extra: dict = field(default_factory=dict)
@@ -79,6 +82,20 @@ class MediaFile:
     @property
     def frame_duration(self) -> Fraction:
         return 1 / self.frame_rate if self.frame_rate else Fraction(1, 30)
+
+    @property
+    def is_hdr(self) -> bool:
+        """True for HDR/wide-gamut sources (HLG or PQ transfer, BT.2020).
+
+        Meta glasses record HDR by default and action cameras can too;
+        compositing those frames as ordinary SDR oversaturates the image
+        (skin turns red), so renderers must tone-map them to BT.709.
+        """
+        return (
+            self.color_transfer in ("smpte2084", "arib-std-b67")
+            or self.color_primaries == "bt2020"
+            or self.color_space in ("bt2020nc", "bt2020c")
+        )
 
 
 def _bundled_tool_dirs() -> list[Path]:
@@ -222,6 +239,9 @@ def probe(path: Path) -> MediaFile:
         creation_time=_parse_creation_time(all_tags),
         make=make,
         model=model,
+        color_space=video.get("color_space", "") or "",
+        color_primaries=video.get("color_primaries", "") or "",
+        color_transfer=video.get("color_transfer", "") or "",
     )
 
 

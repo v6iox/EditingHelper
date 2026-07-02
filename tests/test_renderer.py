@@ -10,7 +10,13 @@ from pathlib import Path
 
 import pytest
 
-from editsync.renderer import build_command, db_to_gain, region_gain_expr
+from editsync.renderer import (
+    TONE_MAP,
+    build_command,
+    db_to_gain,
+    ffmpeg_supports_tonemap,
+    region_gain_expr,
+)
 from editsync.timeline import (
     BlurRegion,
     DuckRegion,
@@ -90,6 +96,48 @@ class TestBuildCommand:
         assert "fade=t=out:st=2.0000:d=1.0000:alpha=1" in graph
         assert "amix=inputs=3" in graph
 
+    def test_sdr_clips_are_not_tonemapped(self, timeline):
+        cmd = build_command(timeline, Path("/tmp/out.mp4"))
+        graph = cmd[cmd.index("-filter_complex") + 1]
+        assert "tonemap" not in graph
+        # but every scaler still lands in the bt709 matrix
+        assert "out_color_matrix=bt709" in graph
+
+    def test_hdr_overlay_gets_tonemapped(self, timeline, make_media):
+        # Meta glasses record HLG/BT.2020 — composited as SDR the image
+        # goes red, so the render must tone-map it down to BT.709
+        hdr = make_media(
+            name="meta_hdr.mp4", width=360, height=640, duration=5.0,
+            color_space="bt2020nc", color_primaries="bt2020",
+            color_transfer="arib-std-b67",
+        )
+        timeline.clips.append(
+            TimelineClip(hdr, Fraction(20), Fraction(5), Fraction(0), 2,
+                         role="Meta")
+        )
+        cmd = build_command(timeline, Path("/tmp/out.mp4"))
+        graph = cmd[cmd.index("-filter_complex") + 1]
+        assert graph.count(TONE_MAP) == 1  # only the HDR clip, once
+
+    def test_hdr_without_zscale_falls_back_to_matrix(self, timeline, make_media):
+        hdr = make_media(
+            name="meta_hdr.mp4", width=360, height=640, duration=5.0,
+            color_transfer="smpte2084",
+        )
+        timeline.clips.append(
+            TimelineClip(hdr, Fraction(20), Fraction(5), Fraction(0), 2,
+                         role="Meta")
+        )
+        cmd = build_command(timeline, Path("/tmp/out.mp4"), tonemap=False)
+        graph = cmd[cmd.index("-filter_complex") + 1]
+        assert "tonemap" not in graph
+        assert "out_color_matrix=bt709" in graph
+
+    def test_output_is_tagged_bt709(self, timeline):
+        cmd = build_command(timeline, Path("/tmp/out.mp4"))
+        for flag in ("-colorspace", "-color_primaries", "-color_trc"):
+            assert cmd[cmd.index(flag) + 1] == "bt709"
+
     def test_input_deduplication(self, timeline):
         # a media file used twice must only be an ffmpeg input once
         clip = timeline.primary_clips[0]
@@ -157,3 +205,47 @@ class TestRealRender:
         assert mean_luma(1.0) > 180
         # t=6: card long gone -> the gray test footage, much darker
         assert mean_luma(6.0) < 170
+
+        # the finished file must say what color space it is
+        assert video.get("color_space") == "bt709"
+        assert video.get("color_primaries") == "bt709"
+        assert video.get("color_transfer") == "bt709"
+
+    def test_render_hdr_overlay(self, tmp_path):
+        """An HLG/BT.2020 glasses clip renders through the tone-map path
+        and comes out as tagged SDR bt709 (the overly-red bug)."""
+        from tests.test_integration import SR, scene_audio, write_video
+        import numpy as np
+        from editsync.cli import main
+
+        master = scene_audio(20)
+        dji = tmp_path / "DJI_0001.mp4"
+        write_video(dji, master, 640, 360, "2026-06-20T10:00:00Z")
+        seg = (0.6 * master[8 * SR : 13 * SR]).astype(np.float32)
+        meta = tmp_path / "meta_001.mp4"
+        write_video(meta, seg, 360, 640, "2026-06-20T10:00:08Z", hdr=True)
+
+        from editsync.media import probe as probe_media
+        assert probe_media(meta).is_hdr  # ffprobe capture feeds the tone-map
+
+        out = tmp_path / "final"
+        rc = main(["sync", str(dji), str(meta), "-o", str(out), "--render"])
+        assert rc == 0
+        mp4 = tmp_path / "final.mp4"
+        assert mp4.exists()
+
+        video = json.loads(
+            subprocess.run(
+                ["ffprobe", "-v", "error", "-print_format", "json",
+                 "-show_streams", str(mp4)],
+                capture_output=True, text=True, check=True,
+            ).stdout
+        )["streams"][0]
+        assert video.get("color_space") == "bt709"
+        assert video.get("color_transfer") == "bt709"
+
+    def test_tonemap_support_detection(self):
+        # whatever the answer, it must be cached and boolean
+        got = ffmpeg_supports_tonemap("ffmpeg")
+        assert isinstance(got, bool)
+        assert ffmpeg_supports_tonemap("ffmpeg") is got

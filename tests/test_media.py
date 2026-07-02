@@ -52,3 +52,26 @@ class TestSortPrimaries:
         b = make_media(name="b.mp4")
         a = make_media(name="a.mp4")
         assert [m.name for m in sort_primaries([b, a])] == ["a", "b"]
+
+
+class TestHDRDetection:
+    def test_sdr_bt709_is_not_hdr(self, make_media):
+        m = make_media(color_space="bt709", color_primaries="bt709",
+                       color_transfer="bt709")
+        assert not m.is_hdr
+
+    def test_untagged_is_not_hdr(self, make_media):
+        assert not make_media().is_hdr
+
+    def test_hlg_is_hdr(self, make_media):
+        # Meta glasses default: HLG transfer in BT.2020
+        m = make_media(color_space="bt2020nc", color_primaries="bt2020",
+                       color_transfer="arib-std-b67")
+        assert m.is_hdr
+
+    def test_pq_is_hdr(self, make_media):
+        m = make_media(color_transfer="smpte2084")
+        assert m.is_hdr
+
+    def test_bt2020_primaries_alone_is_hdr(self, make_media):
+        assert make_media(color_primaries="bt2020").is_hdr

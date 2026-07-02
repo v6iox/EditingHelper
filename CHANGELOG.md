@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.4.1 — 2026-07-02
+
+- **Fixed: footage turned overly red when a glasses clip played** in the
+  finished-video render. Meta glasses record HDR (HLG/BT.2020); the
+  renderer was compositing those frames as ordinary SDR, which
+  oversaturates the picture. HDR sources are now tone-mapped down to
+  BT.709 (with a matrix-only fallback on ffmpeg builds without zscale),
+  SDR sources with a different YUV matrix are converted too, and the
+  output file is tagged `bt709` so every player reads it the same way.
+  The iPhone app's live preview and export now pin their working color
+  space to SDR BT.709 for the same reason.
+
 ## 1.4.0 — 2026-07-02
 
 - **CapCut support on all platforms.** Desktop (Mac/Windows): a new

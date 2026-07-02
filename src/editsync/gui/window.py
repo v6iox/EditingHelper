@@ -38,6 +38,7 @@ from PySide6.QtWidgets import (
 from .. import __version__
 from ..builder import BuildOptions
 from ..media import MediaFile, ProbeError, Role, require_tool
+from .recreational import RecreationalPage
 from .testmode import SecretTrigger, TestModeDialog
 from .title_picker import TitleStylePicker
 from .update import start_update_check
@@ -71,6 +72,30 @@ def brand_logo(height: int, vertical: bool = False) -> QLabel | None:
     return label
 
 
+class ModeSwitch(QWidget):
+    """The corner switcher between the app's two sides: Training (the
+    one-button sync flow) and Recreational (the studio timeline)."""
+
+    def __init__(self, window: "MainWindow"):
+        super().__init__(window)
+        self._window = window
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setSpacing(4)
+        self.seg = Segmented(
+            [("training", "Training"), ("recreational", "Recreational")],
+            default="training",
+        )
+        self.seg.changed.connect(window.set_mode)
+        layout.addWidget(self.seg)
+        self.adjustSize()
+
+    def reposition(self) -> None:
+        self.adjustSize()
+        self.move(self._window.width() - self.width() - 14, 10)
+        self.raise_()
+
+
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
@@ -96,17 +121,39 @@ class MainWindow(QWidget):
         self.setup_page = self._build_setup_page()
         self.working_page = self._build_working_page()
         self.done_page = self._build_done_page()
+        self.rec_page = RecreationalPage(self)
         self.stack.addWidget(self.setup_page)
         self.stack.addWidget(self.working_page)
         self.stack.addWidget(self.done_page)
+        self.stack.addWidget(self.rec_page)
+
+        self.mode = "training"
+        self.mode_switch = ModeSwitch(self)
 
         self._load_settings()
         self._update_worker = start_update_check(self)
+        self.mode_switch.reposition()
+
+    def set_mode(self, mode: str) -> None:
+        """Flip between the training flow and the recreational studio."""
+        if mode not in ("training", "recreational"):
+            mode = "training"
+        self.mode = mode
+        self.mode_switch.seg.blockSignals(True)
+        self.mode_switch.seg.set_value(mode)
+        self.mode_switch.seg.blockSignals(False)
+        if mode == "recreational":
+            self._pulse.stop()
+            self.stack.setCurrentWidget(self.rec_page)
+        else:
+            self.stack.setCurrentWidget(self.setup_page)
+        self.mode_switch.reposition()
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         if self.update_pill is not None:
             self.update_pill.reposition()
+        self.mode_switch.reposition()
 
     # ------------------------------------------------------------- setup
     def _build_setup_page(self) -> QWidget:
@@ -449,6 +496,8 @@ class MainWindow(QWidget):
             self._pulse.start()
         else:
             self._pulse.stop()
+        # no mode-hopping while the sync analysis is running
+        self.mode_switch.setEnabled(page is not self.working_page)
         self.stack.setCurrentWidget(page)
         effect = QGraphicsOpacityEffect(page)
         page.setGraphicsEffect(effect)
@@ -462,7 +511,13 @@ class MainWindow(QWidget):
 
     # ------------------------------------------------- window-level drops
     def dragEnterEvent(self, event) -> None:
-        if event.mimeData().hasUrls() and self.stack.currentWidget() is self.setup_page:
+        current = self.stack.currentWidget()
+        droppable = current is self.setup_page or (
+            current is self.rec_page
+            and self.rec_page.screens.currentWidget()
+            is self.rec_page.intake_screen
+        )
+        if event.mimeData().hasUrls() and droppable:
             event.acceptProposedAction()
 
     def dropEvent(self, event) -> None:
@@ -472,7 +527,10 @@ class MainWindow(QWidget):
             if url.isLocalFile()
         ]
         if paths:
-            self._add_paths(paths)
+            if self.stack.currentWidget() is self.rec_page:
+                self.rec_page.add_paths(paths)
+            else:
+                self._add_paths(paths)
         event.acceptProposedAction()
 
     def _on_style_changed(self, value: str) -> None:
@@ -750,6 +808,8 @@ class MainWindow(QWidget):
         )
         self.title_hold_slider.setValue(s.value("title_hold_halves", 6, type=int))
         self.title_fade_slider.setValue(s.value("title_fade_quarters", 4, type=int))
+        self.rec_page.load_settings(s)
+        self.set_mode(s.value("mode", "training"))
         geometry = s.value("geometry")
         if geometry is not None:
             self.restoreGeometry(geometry)
@@ -774,6 +834,8 @@ class MainWindow(QWidget):
         s.setValue("title_style", self.title_style_picker.value())
         s.setValue("title_hold_halves", self.title_hold_slider.value())
         s.setValue("title_fade_quarters", self.title_fade_slider.value())
+        self.rec_page.save_settings(s)
+        s.setValue("mode", self.mode)
         s.setValue("geometry", self.saveGeometry())
 
     def closeEvent(self, event) -> None:

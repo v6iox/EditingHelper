@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.5.0 — 2026-07-02
+
+- **Recreational mode — the studio.** A switcher in the top-right corner
+  flips the app between its two sides. Training mode is the familiar
+  one-button flow; Recreational mode opens your footage (still synced by
+  sound first) on a real multi-track timeline with an auto-editing suite:
+  - **Timeline editing**: waveforms on every clip, drag glasses clips,
+    drag edges to trim, Delete to remove, zoom/fit, snapping to beats,
+    clip edges, and whole seconds. Trims and deletes on the main-camera
+    track are *ripple* edits — everything after slides left and every
+    glasses clip stays in sync with the content underneath it.
+  - **Tighten dead air** — finds the quiet stretches and cuts them out
+    in one click (never inside a glasses clip).
+  - **Keep the best moments** — scores every second by loudness and
+    activity and keeps only the top moments (target length slider);
+    glasses clips are always kept.
+  - **Cut to the beat** — detects the music's tempo and nudges every cut
+    onto the beat grid.
+  - **Pick the part to use** — double-click any clip for an intuitive
+    portion picker: thumbnails, waveform, draggable in/out handles.
+  - **Add a clip to the end**, unlimited **Undo**, and **Back to the
+    synced cut**.
+  - **Draft preview** — a fast rough MP4 of the current timeline, opened
+    in your player; full-quality **Export** to every format the app
+    supports (Final Cut, Premiere, Resolve/OTIO, CapCut, finished MP4)
+    with music, ducking, and framing styles intact.
+  - The mode and every studio option persist across launches.
+
 ## 1.4.1 — 2026-07-02
 
 - **Fixed: footage turned overly red when a glasses clip played** in the

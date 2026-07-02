@@ -76,6 +76,41 @@ locally on a Mac: `./packaging/build_macos.sh`.)*
    - each clip freely trimmable/extendable — sync is not lost when you
      drag its edges, because the clip's media is already aligned.
 
+## The other side: Recreational mode
+
+The switcher in the **top-right corner** flips the app between its two
+sides. **Training** is everything described above. **Recreational** is
+for everything else you film — it opens the same synced footage on a
+real timeline and helps you cut it like an editor would, without the
+editing degree:
+
+1. Drop footage (main camera required, glasses clips and a song
+   optional), pick your framing/audio/music options, press **Open the
+   studio**.
+2. Your shoot appears on a multi-track timeline: main camera at the
+   bottom, glasses clips layered above at their synced spots, music
+   underneath, waveforms on everything.
+3. Let the automations do the boring work — every one of them is a
+   single click and fully undoable:
+   - **Tighten dead air** cuts the quiet stretches out of the whole
+     video and slides everything together; glasses clips never lose
+     sync (their matching main-camera content moves with them).
+   - **Keep the best moments** listens for the loudest, busiest
+     seconds and keeps roughly the amount you choose on the slider —
+     glasses clips always survive.
+   - **Cut to the beat** finds your song's tempo and nudges every cut
+     onto the beat.
+4. Fine-tune by hand: **double-click any clip** to pick exactly the
+   part you want (thumbnails + waveform + drag handles), drag clip
+   edges to trim, drag glasses clips to move them, press Delete to
+   remove one, **Add a clip to the end** to bring in anything else.
+5. **Draft preview** renders a fast rough MP4 to watch immediately;
+   **Export** saves the real thing — any of the same formats as
+   training mode, including the finished video.
+
+Mistakes are cheap: **Undo** steps back through everything, and **Back
+to the synced cut** returns to the freshly synced timeline.
+
 ## Updates
 
 When a newer version exists, a small prompt appears in the bottom-left

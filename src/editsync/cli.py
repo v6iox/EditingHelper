@@ -78,6 +78,7 @@ def cmd_sync(args) -> int:
         lane_per_clip=args.lane_per_clip,
         preserve_gaps=args.preserve_gaps,
         overlay_style=args.overlay_style,
+        blur_amount=args.blur_amount,
         force_place=args.force_place,
         add_sync_markers=not args.no_markers,
         search_window=args.search_window,
@@ -185,8 +186,16 @@ def main(argv: list[str] | None = None) -> int:
     p_sync.add_argument(
         "--overlay-style",
         default="center",
-        choices=["center", "fill", "pip-left", "pip-right"],
-        help="how vertical overlay clips are framed in the horizontal sequence",
+        choices=["center", "blur-bg", "fill", "pip-left", "pip-right"],
+        help="how vertical overlay clips are framed in the horizontal sequence "
+        "(blur-bg keeps the clip sharp and blurs the main camera behind it)",
+    )
+    p_sync.add_argument(
+        "--blur-amount",
+        type=float,
+        default=50.0,
+        metavar="0-100",
+        help="background blur strength for --overlay-style blur-bg (default: 50)",
     )
     p_sync.add_argument(
         "--duck",

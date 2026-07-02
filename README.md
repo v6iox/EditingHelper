@@ -92,8 +92,10 @@ editsync sync ./footage -o myvideo.fcpxml --search-window 120
 - **Multi-file primary support** — DJI cameras split long recordings;
   segments are ordered by creation time and treated as one continuous
   storyline (`--preserve-gaps` keeps real-world pauses instead).
-- **Vertical-video framing presets** — `center` (pillarbox), `fill`
-  (scale to fill), `pip-left` / `pip-right` picture-in-picture.
+- **Vertical-video framing presets** — `blur-bg` (the wide shot stays
+  behind the vertical clip with a keyframed Gaussian blur, strength set
+  by `--blur-amount`), `center` (pillarbox over the sharp wide shot),
+  `fill` (scale to fill), `pip-left` / `pip-right` picture-in-picture.
 - **Minimal or one-lane-per-clip layering** — overlapping overlays never
   collide; `--lane-per-clip` gives every clip its own layer if you prefer.
 - **Roles** — clips are tagged `dialogue.DJI` / `dialogue.Meta` in FCP so

@@ -128,7 +128,15 @@ def export(timeline: Timeline, path: Path) -> None:
                         "level_db": r.level_db,
                     }
                     for r in timeline.duck_regions
-                ]
+                ],
+                "blur_regions": [
+                    {
+                        "start": float(r.start),
+                        "end": float(r.end),
+                        "amount": r.amount,
+                    }
+                    for r in timeline.blur_regions
+                ],
             }
         },
     }

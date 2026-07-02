@@ -169,6 +169,31 @@ def test_all_formats_export(footage, tmp_path):
     assert len(tracks) == 2
 
 
+def test_blur_background_style(footage, tmp_path):
+    out = tmp_path / "blurred.fcpxml"
+    rc = main(
+        [
+            "sync",
+            str(footage["dji"]),
+            str(footage["meta1"]),
+            "-o", str(out),
+            "--overlay-style", "blur-bg",
+            "--blur-amount", "65",
+        ]
+    )
+    assert rc == 0
+    root = ET.fromstring(out.read_text().split("<!DOCTYPE fcpxml>")[1])
+    assert root.find("./resources/effect").get("uid") == "FFGaussianBlur"
+    primary = root.find("./library/event/project/sequence/spine/asset-clip")
+    keyframes = primary.findall("./filter-video/param/keyframe")
+    # ramps 0 -> 65 at the overlay, back to 0 after
+    assert [k.get("value") for k in keyframes] == ["0", "65", "65", "0"]
+    # the overlay itself stays sharp: no filter, no transform
+    overlay = primary.find("asset-clip")
+    assert overlay.find("filter-video") is None
+    assert overlay.find("adjust-transform") is None
+
+
 def test_probe_classification(footage, capsys):
     rc = main(["probe", str(footage["root"])])
     assert rc == 0

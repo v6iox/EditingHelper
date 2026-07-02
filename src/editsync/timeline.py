@@ -54,6 +54,16 @@ class DuckRegion:
 
 
 @dataclass
+class BlurRegion:
+    """Timeline interval where the primary camera's video should be blurred
+    (the 'blurred background behind a vertical clip' look)."""
+
+    start: Fraction
+    end: Fraction
+    amount: float  # Gaussian blur amount, 0-100
+
+
+@dataclass
 class Timeline:
     name: str
     frame_rate: Fraction
@@ -61,6 +71,7 @@ class Timeline:
     height: int
     clips: list[TimelineClip] = field(default_factory=list)
     duck_regions: list[DuckRegion] = field(default_factory=list)
+    blur_regions: list[BlurRegion] = field(default_factory=list)
 
     @property
     def frame_duration(self) -> Fraction:

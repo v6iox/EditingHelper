@@ -33,8 +33,10 @@ locally on a Mac: `./packaging/build_macos.sh`.)*
 
 2. **Pick your options** — all in plain language:
    - **Project name** — what the project will be called in Final Cut.
-   - **Vertical clips look like** — centered, fill the frame, or small in
-     a corner. (Just a starting point; you can move them in Final Cut.)
+   - **Vertical clips look like** — **Blurred background** (the default:
+     your wide shot stays behind the vertical clip, softly blurred, with
+     a slider for how much blur), centered, fill the frame, or small in a
+     corner. (Just a starting point; you can change it in Final Cut.)
    - **While a glasses clip plays** — mute the main camera, turn it down,
      or leave it alone.
    - **Save for** — Final Cut Pro, Premiere Pro, and/or DaVinci Resolve.

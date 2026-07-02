@@ -10,7 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QUrl
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtGui import QDesktopServices, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
     QFileDialog,
@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QScrollArea,
+    QSlider,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
@@ -34,13 +35,29 @@ from .widgets import DropZone, FileRow, Segmented, section_label
 from .worker import ProbeWorker, SyncJob, SyncOutcome, SyncWorker
 
 VIDEO_FILTER = "Videos (*.mp4 *.mov *.m4v *.mts *.m2ts *.avi *.mkv)"
+LOGO_PATH = Path(__file__).parent / "assets" / "logo.png"
+
+
+def brand_logo(height: int) -> QLabel | None:
+    """The 86 Auto Lab wordmark, scaled to `height` px (None if missing)."""
+    if not LOGO_PATH.is_file():
+        return None
+    pixmap = QPixmap(str(LOGO_PATH))
+    if pixmap.isNull():
+        return None
+    # render at 2x and mark it high-DPI so it stays crisp on retina displays
+    scaled = pixmap.scaledToHeight(height * 2, Qt.SmoothTransformation)
+    scaled.setDevicePixelRatio(2.0)
+    label = QLabel()
+    label.setPixmap(scaled)
+    return label
 
 
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.setObjectName("Root")
-        self.setWindowTitle("EditSync")
+        self.setWindowTitle("EditSync — 86 Auto Lab")
         self.setMinimumSize(760, 640)
 
         self.media: list[MediaFile] = []
@@ -72,15 +89,21 @@ class MainWindow(QWidget):
         layout.setContentsMargins(36, 28, 36, 28)
         layout.setSpacing(16)
 
+        logo = brand_logo(34)
+        if logo is not None:
+            layout.addWidget(logo)
+        header = QHBoxLayout()
         title = QLabel("EDITSYNC")
         title.setObjectName("Title")
+        header.addWidget(title)
+        header.addStretch(1)
+        layout.addLayout(header)
         subtitle = QLabel(
             "Drop everything from the shoot. Your glasses clips are matched "
             "to the main camera by sound and layered onto one timeline."
         )
         subtitle.setObjectName("Subtitle")
         subtitle.setWordWrap(True)
-        layout.addWidget(title)
         layout.addWidget(subtitle)
 
         self.drop_zone = DropZone()
@@ -136,14 +159,34 @@ class MainWindow(QWidget):
         opt.addWidget(section_label("Vertical clips look like"))
         self.style_seg = Segmented(
             [
+                ("blur-bg", "Blurred background"),
                 ("center", "Centered"),
                 ("fill", "Fill the frame"),
                 ("pip-left", "Small · left"),
                 ("pip-right", "Small · right"),
             ],
-            default="center",
+            default="blur-bg",
         )
+        self.style_seg.changed.connect(self._on_style_changed)
         opt.addWidget(self.style_seg)
+
+        blur_row = QHBoxLayout()
+        self.blur_label = QLabel("Background blur")
+        self.blur_label.setObjectName("Hint")
+        self.blur_slider = QSlider(Qt.Horizontal)
+        self.blur_slider.setRange(5, 100)
+        self.blur_slider.setValue(50)
+        self.blur_slider.setMaximumWidth(240)
+        self.blur_value = QLabel("50")
+        self.blur_value.setObjectName("Hint")
+        self.blur_slider.valueChanged.connect(
+            lambda v: self.blur_value.setText(str(v))
+        )
+        blur_row.addWidget(self.blur_label)
+        blur_row.addWidget(self.blur_slider)
+        blur_row.addWidget(self.blur_value)
+        blur_row.addStretch(1)
+        opt.addLayout(blur_row)
 
         opt.addWidget(section_label("While a glasses clip plays"))
         self.duck_seg = Segmented(
@@ -200,6 +243,11 @@ class MainWindow(QWidget):
         layout.setAlignment(Qt.AlignCenter)
         layout.setSpacing(18)
 
+        logo = brand_logo(22)
+        if logo is not None:
+            logo.setAlignment(Qt.AlignCenter)
+            layout.addWidget(logo, alignment=Qt.AlignHCenter)
+
         self.working_label = QLabel("Listening to your footage…")
         self.working_label.setObjectName("BigStatus")
         self.working_label.setAlignment(Qt.AlignCenter)
@@ -225,6 +273,9 @@ class MainWindow(QWidget):
         layout.setContentsMargins(36, 28, 36, 28)
         layout.setSpacing(14)
 
+        logo = brand_logo(24)
+        if logo is not None:
+            layout.addWidget(logo)
         self.done_title = QLabel("Done")
         self.done_title.setObjectName("Title")
         self.done_summary = QLabel("")
@@ -249,6 +300,12 @@ class MainWindow(QWidget):
         buttons.addWidget(self.reveal_btn)
         layout.addLayout(buttons)
         return page
+
+    def _on_style_changed(self, value: str) -> None:
+        is_blur = value == "blur-bg"
+        self.blur_label.setEnabled(is_blur)
+        self.blur_slider.setEnabled(is_blur)
+        self.blur_value.setEnabled(is_blur)
 
     # ------------------------------------------------------- file intake
     def _browse(self) -> None:
@@ -355,6 +412,7 @@ class MainWindow(QWidget):
             project_name=self.name_edit.text().strip() or "My Video",
             duck_db=None if duck == "off" else float(duck),
             overlay_style=self.style_seg.value(),
+            blur_amount=float(self.blur_slider.value()),
             lane_per_clip=self.lane_per_clip.isChecked(),
         )
         job = SyncJob(

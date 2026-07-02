@@ -8,7 +8,7 @@ import pytest
 
 from editsync.exporters import fcpxml, otio, premiere
 from editsync.exporters.fcpxml import fmt_time
-from editsync.timeline import DuckRegion, Marker, Timeline, TimelineClip
+from editsync.timeline import BlurRegion, DuckRegion, Marker, Timeline, TimelineClip
 
 
 @pytest.fixture
@@ -101,6 +101,30 @@ class TestFcpxml:
         root = self._root(timeline, tmp_path)
         for rep in root.findall(".//media-rep"):
             assert rep.get("src").startswith("file://")
+
+    def test_blur_background_keyframes(self, timeline, tmp_path):
+        timeline.blur_regions = [BlurRegion(Fraction(70), Fraction(78), 60.0)]
+        root = self._root(timeline, tmp_path)
+        effects = root.findall("./resources/effect")
+        assert len(effects) == 1
+        assert effects[0].get("uid") == "FFGaussianBlur"
+        spine = root.find("./library/event/project/sequence/spine")
+        first, second = spine.findall("asset-clip")
+        # only the primary under the overlay gets the blur filter
+        assert first.find("filter-video") is None
+        filt = second.find("filter-video")
+        assert filt is not None
+        assert filt.get("ref") == effects[0].get("id")
+        keyframes = filt.findall("./param/keyframe")
+        values = [k.get("value") for k in keyframes]
+        assert values == ["0", "60", "60", "0"]
+        # blur ramps up right where the overlay starts: 70s - 60s = 10s local
+        assert keyframes[1].get("time") == "10s"
+
+    def test_no_blur_effect_without_regions(self, timeline, tmp_path):
+        root = self._root(timeline, tmp_path)
+        assert not root.findall("./resources/effect")
+        assert not root.findall(".//filter-video")
 
     def test_gap_inserted_for_spaced_primaries(self, timeline, tmp_path):
         timeline.clips[1].timeline_start = Fraction(65)  # 5s hole after clip 1

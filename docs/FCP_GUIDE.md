@@ -61,10 +61,15 @@ care about FCP, so the identical timeline exports to Premiere and OTIO.
 
 ## Tips
 
-- **Vertical framing**: the default `center` style leaves vertical clips
-  pillarboxed at full height. Try `--overlay-style fill` for a punched-in
-  full-frame look, or `pip-right` for picture-in-picture; every value is
-  just a starting Transform you can tweak in the inspector.
+- **Vertical framing**: `--overlay-style blur-bg` gives the classic
+  "sharp vertical clip over a blurred background" look — the main-camera
+  clip underneath gets a keyframed Gaussian Blur that ramps in only while
+  an overlay is on top (strength via `--blur-amount 0-100`). Delete an
+  overlay and you can remove the corresponding blur keyframes from the
+  clip below (Video inspector), or re-run EditSync. Other styles:
+  `center` (pillarboxed over the sharp wide shot), `fill` (punched-in
+  full frame), `pip-left`/`pip-right` picture-in-picture; every value is
+  just a starting Transform/effect you can tweak in the inspector.
 - **Keep DJI audio under overlays**: `--duck -18` instead of the default
   full duck, or `--duck off` to leave mixing entirely to you.
 - **Long shoots with many files**: `--search-window 120` uses the files'

@@ -19,11 +19,11 @@ import hashlib
 import urllib.request
 from fractions import Fraction
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 from xml.etree import ElementTree as ET
 
 from ..media import MediaFile
-from ..timeline import DuckRegion, Timeline, TimelineClip
+from ..timeline import BlurRegion, DuckRegion, Timeline, TimelineClip
 
 FCPXML_VERSION = "1.11"
 
@@ -80,6 +80,14 @@ class _Resources:
             self._formats[key] = rid
         return self._formats[key]
 
+    def effect_id(self, name: str, uid: str) -> str:
+        key = ("effect", name, uid)
+        if key not in self._formats:
+            rid = self._new_id("r")
+            ET.SubElement(self.el, "effect", id=rid, name=name, uid=uid)
+            self._formats[key] = rid
+        return self._formats[key]
+
     def asset_id(self, media: MediaFile) -> str:
         key = str(media.path)
         if key not in self._assets:
@@ -113,42 +121,73 @@ class _Resources:
         return self._assets[key]
 
 
-def _duck_keyframes(
+def _region_keyframes(
     parent: TimelineClip,
-    regions: list[DuckRegion],
+    regions: list[tuple[Fraction, Fraction, float]],
     fade: Fraction,
+    rest_value: float,
+    pick: Callable[[float, float], float],
 ) -> list[tuple[Fraction, float]]:
-    """Volume keyframes (in the parent clip's source time) for duck regions
-    overlapping the parent, clamped to the parent's extent."""
+    """Keyframes (in the parent clip's source time) ramping a parameter from
+    `rest_value` to each region's value and back, clamped to the parent.
+
+    Used for both audio ducking (value = dB, pick = min so the more-ducked
+    level wins on collisions) and background blur (value = amount, pick =
+    max so the blur wins when a region touches a clip edge).
+    """
     keyframes: list[tuple[Fraction, float]] = []
     clip_start, clip_end = parent.timeline_start, parent.timeline_end
 
     def to_src(t: Fraction) -> Fraction:
         return parent.source_start + (t - clip_start)
 
-    for region in regions:
-        if region.end <= clip_start or region.start >= clip_end:
+    for start, end, value in regions:
+        if end <= clip_start or start >= clip_end:
             continue
         points = [
-            (region.start - fade, 0.0),
-            (region.start, region.level_db),
-            (region.end, region.level_db),
-            (region.end + fade, 0.0),
+            (start - fade, rest_value),
+            (start, value),
+            (end, value),
+            (end + fade, rest_value),
         ]
         for t, level in points:
             t_clamped = min(max(t, clip_start), clip_end)
             keyframes.append((to_src(t_clamped), level))
     # keep keyframes strictly increasing in time; when clamping makes two
-    # keyframes collide (duck region touching a clip edge), keep the more
-    # ducked level so the overlay's audio still wins
+    # keyframes collide (region touching a clip edge), `pick` decides which
+    # value survives so the overlay treatment still wins
     keyframes.sort(key=lambda kv: kv[0])
     unique: list[tuple[Fraction, float]] = []
     for t, level in keyframes:
         if unique and t <= unique[-1][0]:
-            unique[-1] = (unique[-1][0], min(unique[-1][1], level))
+            unique[-1] = (unique[-1][0], pick(unique[-1][1], level))
             continue
         unique.append((t, level))
     return unique
+
+
+def _duck_keyframes(
+    parent: TimelineClip, regions: list[DuckRegion], fade: Fraction
+) -> list[tuple[Fraction, float]]:
+    return _region_keyframes(
+        parent,
+        [(r.start, r.end, r.level_db) for r in regions],
+        fade,
+        rest_value=0.0,
+        pick=min,
+    )
+
+
+def _blur_keyframes(
+    parent: TimelineClip, regions: list[BlurRegion], fade: Fraction
+) -> list[tuple[Fraction, float]]:
+    return _region_keyframes(
+        parent,
+        [(r.start, r.end, r.amount) for r in regions],
+        fade,
+        rest_value=0.0,
+        pick=max,
+    )
 
 
 def _add_transform(el: ET.Element, clip: TimelineClip) -> None:
@@ -175,6 +214,19 @@ def _add_volume_keyframes(
         ET.SubElement(
             param, "keyframe", time=fmt_time(t), value=fmt_db(level)
         )
+
+
+def _add_blur_filter(
+    el: ET.Element, effect_ref: str, keyframes: list[tuple[Fraction, float]]
+) -> None:
+    """Keyframed Gaussian blur so the primary is only blurred while an
+    overlay sits on top of it."""
+    if not keyframes:
+        return
+    filt = ET.SubElement(el, "filter-video", ref=effect_ref, name="Gaussian Blur")
+    param = ET.SubElement(filt, "param", name="amount")
+    for t, amount in keyframes:
+        ET.SubElement(param, "keyframe", time=fmt_time(t), value=f"{amount:g}")
 
 
 def _add_markers(el: ET.Element, clip: TimelineClip, frame_duration: Fraction) -> None:
@@ -233,6 +285,11 @@ def build_tree(timeline: Timeline) -> ET.ElementTree:
         children[id(_overlay_parent(o, primaries))].append(o)
 
     fade = Fraction(1, 4)
+    blur_effect = (
+        resources.effect_id("Gaussian Blur", "FFGaussianBlur")
+        if timeline.blur_regions
+        else None
+    )
     cursor = Fraction(0)
     for p in primaries:
         if p.timeline_start > cursor:
@@ -287,6 +344,12 @@ def build_tree(timeline: Timeline) -> ET.ElementTree:
             _add_markers(o_el, o, timeline.frame_duration)
 
         _add_markers(p_el, p, timeline.frame_duration)
+        if blur_effect:
+            _add_blur_filter(
+                p_el,
+                blur_effect,
+                _blur_keyframes(p, timeline.blur_regions, fade),
+            )
         cursor = p.timeline_end
 
     return ET.ElementTree(root)

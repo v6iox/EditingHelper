@@ -18,6 +18,7 @@ from . import audio as audio_mod
 from .media import MediaFile, sort_primaries
 from .sync import SyncResult, find_clip_in_reference
 from .timeline import (
+    BlurRegion,
     DuckRegion,
     Marker,
     Timeline,
@@ -38,7 +39,8 @@ class BuildOptions:
     duck_fade: float = 0.25  # seconds of fade into/out of a duck region
     lane_per_clip: bool = False
     preserve_gaps: bool = False  # keep real-world gaps between primary files
-    overlay_style: str = "center"  # center | fill | pip-left | pip-right
+    overlay_style: str = "center"  # center | blur-bg | fill | pip-left | pip-right
+    blur_amount: float = 50.0  # background blur strength for blur-bg, 0-100
     force_place: bool = False  # place low-confidence clips anyway (flagged)
     add_sync_markers: bool = True
     search_window: Optional[float] = None  # limit search via creation times, s
@@ -80,8 +82,12 @@ def _overlay_transform(
     Editors conform (fit) by default, so a vertical clip is pillarboxed at
     full height. Values approximate inspector units; they are starting
     points the editor can tweak, not pixel-perfect layouts.
+
+    "blur-bg" keeps the vertical clip centered and sharp; the background
+    treatment (blurring the primary underneath) is handled separately via
+    Timeline.blur_regions.
     """
-    if style == "center" or media.display_height <= media.display_width:
+    if style in ("center", "blur-bg") or media.display_height <= media.display_width:
         return None, None
     fitted_w = media.display_width * (seq_h / media.display_height)
     if style == "fill":
@@ -339,14 +345,19 @@ def build(
 
     assign_lanes(timeline.clips, lane_per_clip=opts.lane_per_clip)
 
-    # --- primary-audio ducking under overlays ---------------------------
+    # --- primary treatment under overlays: audio duck, optional blur ----
+    overlay_intervals = merge_intervals(
+        [(c.timeline_start, c.timeline_end) for c in timeline.overlay_clips]
+    )
     if opts.duck_db is not None:
-        intervals = [
-            (c.timeline_start, c.timeline_end) for c in timeline.overlay_clips
-        ]
         timeline.duck_regions = [
             DuckRegion(start=s, end=e, level_db=opts.duck_db)
-            for s, e in merge_intervals(intervals)
+            for s, e in overlay_intervals
+        ]
+    if opts.overlay_style == "blur-bg" and opts.blur_amount > 0:
+        timeline.blur_regions = [
+            BlurRegion(start=s, end=e, amount=opts.blur_amount)
+            for s, e in overlay_intervals
         ]
 
     return BuildResult(timeline=timeline, matches=matches, warnings=warnings)

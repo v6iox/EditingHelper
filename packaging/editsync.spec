@@ -25,7 +25,9 @@ a = Analysis(
     [str(ROOT / "packaging" / "launch_app.py")],
     pathex=[str(ROOT / "src")],
     binaries=binaries,
-    datas=[],
+    datas=[
+        (str(ROOT / "src" / "editsync" / "gui" / "assets"), "editsync/gui/assets"),
+    ],
     hiddenimports=[],
     excludes=["tkinter", "scipy", "matplotlib", "PIL"],
     noarchive=False,

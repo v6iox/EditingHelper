@@ -71,9 +71,25 @@ class TestMainWindow:
 
     def test_option_defaults(self, qapp):
         win = MainWindow()
-        assert win.style_seg.value() == "center"
+        assert win.style_seg.value() == "blur-bg"
         assert win.duck_seg.value() == "-60"
+        assert win.blur_slider.value() == 50
         assert not win.lane_per_clip.isChecked()
+
+    def test_blur_slider_follows_style(self, qapp):
+        win = MainWindow()
+        win._on_style_changed("center")
+        assert not win.blur_slider.isEnabled()
+        win._on_style_changed("blur-bg")
+        assert win.blur_slider.isEnabled()
+
+    def test_brand_logo_loads(self, qapp):
+        from editsync.gui.window import LOGO_PATH, brand_logo
+
+        assert LOGO_PATH.is_file()
+        label = brand_logo(30)
+        assert label is not None
+        assert not label.pixmap().isNull()
 
 
 @pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")

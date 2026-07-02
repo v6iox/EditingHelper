@@ -20,6 +20,10 @@ if (-not (Test-Path packaging\bin\ffmpeg.exe)) {
     Copy-Item (Join-Path $bin.DirectoryName "ffprobe.exe") packaging\bin\ffprobe.exe
 }
 
+Write-Host "==> Generating app icon (.ico)"
+python -m pip install pillow | Out-Null
+python -c "from PIL import Image; Image.open('src/editsync/gui/assets/icon.png').save('packaging/icon.ico', sizes=[(16,16),(32,32),(48,48),(64,64),(128,128),(256,256)])"
+
 Write-Host "==> Building EditSync"
 pyinstaller --noconfirm packaging\editsync.spec
 

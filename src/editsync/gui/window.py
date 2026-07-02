@@ -9,19 +9,25 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QUrl
-from PySide6.QtGui import QDesktopServices, QPixmap
+from PySide6.QtCore import (
+    QEasingCurve,
+    QPropertyAnimation,
+    QSettings,
+    Qt,
+    QUrl,
+)
+from PySide6.QtGui import QDesktopServices, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
     QFileDialog,
     QFrame,
+    QGraphicsOpacityEffect,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QMessageBox,
     QPlainTextEdit,
     QProgressBar,
-    QPushButton,
     QScrollArea,
     QSlider,
     QStackedWidget,
@@ -29,20 +35,26 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .. import __version__
 from ..builder import BuildOptions
 from ..media import MediaFile, ProbeError, Role, require_tool
-from .widgets import DropZone, FileRow, Segmented, section_label
+from .widgets import AnimatedButton, DropZone, FileRow, Segmented, section_label
 from .worker import ProbeWorker, SyncJob, SyncOutcome, SyncWorker
 
 VIDEO_FILTER = "Videos (*.mp4 *.mov *.m4v *.mts *.m2ts *.avi *.mkv)"
 LOGO_PATH = Path(__file__).parent / "assets" / "logo.png"
+VERTICAL_LOGO_PATH = Path(__file__).parent / "assets" / "logo_vertical.png"
+ICON_PATH = Path(__file__).parent / "assets" / "icon.png"
 
 
-def brand_logo(height: int) -> QLabel | None:
-    """The 86 Auto Lab wordmark, scaled to `height` px (None if missing)."""
-    if not LOGO_PATH.is_file():
+def brand_logo(height: int, vertical: bool = False) -> QLabel | None:
+    """The 86 Auto Lab mark scaled to `height` px: the wide wordmark by
+    default, the stacked vertical logo where a tall format fits better.
+    Returns None if the asset is missing."""
+    path = VERTICAL_LOGO_PATH if vertical else LOGO_PATH
+    if not path.is_file():
         return None
-    pixmap = QPixmap(str(LOGO_PATH))
+    pixmap = QPixmap(str(path))
     if pixmap.isNull():
         return None
     # render at 2x and mark it high-DPI so it stays crisp on retina displays
@@ -59,11 +71,15 @@ class MainWindow(QWidget):
         self.setObjectName("Root")
         self.setWindowTitle("EditSync — 86 Auto Lab")
         self.setMinimumSize(760, 640)
+        if ICON_PATH.is_file():
+            self.setWindowIcon(QIcon(str(ICON_PATH)))
+        self.setAcceptDrops(True)  # dropping anywhere on the window works
 
         self.media: list[MediaFile] = []
         self._probe_worker: ProbeWorker | None = None
         self._sync_worker: SyncWorker | None = None
         self._output_dir: Path | None = None
+        self._page_fade: QPropertyAnimation | None = None
 
         self.stack = QStackedWidget()
         outer = QVBoxLayout(self)
@@ -76,6 +92,8 @@ class MainWindow(QWidget):
         self.stack.addWidget(self.setup_page)
         self.stack.addWidget(self.working_page)
         self.stack.addWidget(self.done_page)
+
+        self._load_settings()
 
     # ------------------------------------------------------------- setup
     def _build_setup_page(self) -> QWidget:
@@ -118,9 +136,7 @@ class MainWindow(QWidget):
         files_layout.setContentsMargins(16, 12, 16, 12)
         header = QHBoxLayout()
         self.files_label = section_label("Footage")
-        clear = QPushButton("Clear all")
-        clear.setObjectName("Ghost")
-        clear.setCursor(Qt.PointingHandCursor)
+        clear = AnimatedButton("Clear all", kind="ghost")
         clear.clicked.connect(self._clear_files)
         header.addWidget(self.files_label)
         header.addStretch(1)
@@ -224,14 +240,17 @@ class MainWindow(QWidget):
         bottom = QHBoxLayout()
         self.status_hint = QLabel("")
         self.status_hint.setObjectName("Hint")
-        self.sync_btn = QPushButton("Sync my footage")
-        self.sync_btn.setObjectName("Primary")
-        self.sync_btn.setCursor(Qt.PointingHandCursor)
+        self.sync_btn = AnimatedButton("Sync my footage", kind="primary")
         self.sync_btn.setEnabled(False)
         self.sync_btn.clicked.connect(self._start_sync)
         bottom.addWidget(self.status_hint, stretch=1)
         bottom.addWidget(self.sync_btn)
         layout.addLayout(bottom)
+
+        footer = QLabel(f"EditSync {__version__} — 86 Auto Lab")
+        footer.setObjectName("Hint")
+        footer.setAlignment(Qt.AlignHCenter)
+        layout.addWidget(footer)
         return page
 
     # ----------------------------------------------------------- working
@@ -243,7 +262,7 @@ class MainWindow(QWidget):
         layout.setAlignment(Qt.AlignCenter)
         layout.setSpacing(18)
 
-        logo = brand_logo(22)
+        logo = brand_logo(120, vertical=True)
         if logo is not None:
             logo.setAlignment(Qt.AlignCenter)
             layout.addWidget(logo, alignment=Qt.AlignHCenter)
@@ -251,6 +270,16 @@ class MainWindow(QWidget):
         self.working_label = QLabel("Listening to your footage…")
         self.working_label.setObjectName("BigStatus")
         self.working_label.setAlignment(Qt.AlignCenter)
+        # slow breathing pulse while the analysis runs
+        pulse_effect = QGraphicsOpacityEffect(self.working_label)
+        self.working_label.setGraphicsEffect(pulse_effect)
+        self._pulse = QPropertyAnimation(pulse_effect, b"opacity", self)
+        self._pulse.setStartValue(1.0)
+        self._pulse.setKeyValueAt(0.5, 0.55)
+        self._pulse.setEndValue(1.0)
+        self._pulse.setDuration(1600)
+        self._pulse.setLoopCount(-1)
+        self._pulse.setEasingCurve(QEasingCurve.InOutSine)
 
         bar = QProgressBar()
         bar.setRange(0, 0)  # indeterminate
@@ -289,17 +318,48 @@ class MainWindow(QWidget):
         layout.addWidget(self.done_details, stretch=1)
 
         buttons = QHBoxLayout()
-        self.reveal_btn = QPushButton("Show the files")
-        self.reveal_btn.setCursor(Qt.PointingHandCursor)
+        self.reveal_btn = AnimatedButton("Show the files", kind="primary")
         self.reveal_btn.clicked.connect(self._reveal_output)
-        again = QPushButton("Start over")
-        again.setCursor(Qt.PointingHandCursor)
+        again = AnimatedButton("Start over")
         again.clicked.connect(self._reset)
         buttons.addStretch(1)
         buttons.addWidget(again)
         buttons.addWidget(self.reveal_btn)
         layout.addLayout(buttons)
         return page
+
+    # -------------------------------------------------------- transitions
+    def _go(self, page: QWidget) -> None:
+        """Switch stacked pages with a quick fade-in."""
+        if page is self.working_page:
+            self._pulse.start()
+        else:
+            self._pulse.stop()
+        self.stack.setCurrentWidget(page)
+        effect = QGraphicsOpacityEffect(page)
+        page.setGraphicsEffect(effect)
+        self._page_fade = QPropertyAnimation(effect, b"opacity", self)
+        self._page_fade.setStartValue(0.0)
+        self._page_fade.setEndValue(1.0)
+        self._page_fade.setDuration(220)
+        self._page_fade.setEasingCurve(QEasingCurve.OutCubic)
+        self._page_fade.finished.connect(lambda: page.setGraphicsEffect(None))
+        self._page_fade.start()
+
+    # ------------------------------------------------- window-level drops
+    def dragEnterEvent(self, event) -> None:
+        if event.mimeData().hasUrls() and self.stack.currentWidget() is self.setup_page:
+            event.acceptProposedAction()
+
+    def dropEvent(self, event) -> None:
+        paths = [
+            Path(url.toLocalFile())
+            for url in event.mimeData().urls()
+            if url.isLocalFile()
+        ]
+        if paths:
+            self._add_paths(paths)
+        event.acceptProposedAction()
 
     def _on_style_changed(self, value: str) -> None:
         is_blur = value == "blur-bg"
@@ -421,7 +481,8 @@ class MainWindow(QWidget):
             formats=formats,
             output_dir=self._output_dir,
         )
-        self.stack.setCurrentWidget(self.working_page)
+        self._save_settings()
+        self._go(self.working_page)
         self._sync_worker = SyncWorker(job, self)
         self._sync_worker.progress.connect(self.working_detail.setText)
         self._sync_worker.finished_ok.connect(self._on_sync_done)
@@ -471,10 +532,10 @@ class MainWindow(QWidget):
                 "synced timeline will appear as a new project."
             )
         self.done_details.setPlainText("\n".join(lines))
-        self.stack.setCurrentWidget(self.done_page)
+        self._go(self.done_page)
 
     def _on_sync_failed(self, message: str) -> None:
-        self.stack.setCurrentWidget(self.setup_page)
+        self._go(self.setup_page)
         QMessageBox.critical(self, "Something went wrong", message)
 
     def _reveal_output(self) -> None:
@@ -482,7 +543,40 @@ class MainWindow(QWidget):
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(self._output_dir)))
 
     def _reset(self) -> None:
-        self.stack.setCurrentWidget(self.setup_page)
+        self._go(self.setup_page)
+
+    # ---------------------------------------------------------- settings
+    @staticmethod
+    def _settings() -> QSettings:
+        return QSettings("86 Auto Lab", "EditSync")
+
+    def _load_settings(self) -> None:
+        s = self._settings()
+        self.style_seg.set_value(s.value("overlay_style", self.style_seg.value()))
+        self.duck_seg.set_value(s.value("duck", self.duck_seg.value()))
+        self.blur_slider.setValue(s.value("blur_amount", self.blur_slider.value(), type=int))
+        self.fmt_fcp.setChecked(s.value("fmt_fcp", True, type=bool))
+        self.fmt_premiere.setChecked(s.value("fmt_premiere", False, type=bool))
+        self.fmt_otio.setChecked(s.value("fmt_otio", False, type=bool))
+        self.lane_per_clip.setChecked(s.value("lane_per_clip", False, type=bool))
+        geometry = s.value("geometry")
+        if geometry is not None:
+            self.restoreGeometry(geometry)
+
+    def _save_settings(self) -> None:
+        s = self._settings()
+        s.setValue("overlay_style", self.style_seg.value())
+        s.setValue("duck", self.duck_seg.value())
+        s.setValue("blur_amount", self.blur_slider.value())
+        s.setValue("fmt_fcp", self.fmt_fcp.isChecked())
+        s.setValue("fmt_premiere", self.fmt_premiere.isChecked())
+        s.setValue("fmt_otio", self.fmt_otio.isChecked())
+        s.setValue("lane_per_clip", self.lane_per_clip.isChecked())
+        s.setValue("geometry", self.saveGeometry())
+
+    def closeEvent(self, event) -> None:
+        self._save_settings()
+        super().closeEvent(event)
 
     # ------------------------------------------------------------ checks
     def check_dependencies(self) -> bool:

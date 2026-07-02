@@ -29,6 +29,27 @@ def qapp():
     yield app
 
 
+@pytest.fixture(autouse=True)
+def clean_settings():
+    """Each test starts from default (empty) persisted settings."""
+    MainWindow._settings().clear()
+    yield
+    MainWindow._settings().clear()
+
+
+def enter_event():
+    from PySide6.QtCore import QPointF
+    from PySide6.QtGui import QEnterEvent
+
+    return QEnterEvent(QPointF(1, 1), QPointF(1, 1), QPointF(1, 1))
+
+
+def leave_event():
+    from PySide6.QtCore import QEvent
+
+    return QEvent(QEvent.Leave)
+
+
 class TestMainWindow:
     def test_sync_disabled_until_both_roles_present(self, qapp, make_media):
         win = MainWindow()
@@ -84,12 +105,91 @@ class TestMainWindow:
         assert win.blur_slider.isEnabled()
 
     def test_brand_logo_loads(self, qapp):
-        from editsync.gui.window import LOGO_PATH, brand_logo
+        from editsync.gui.window import (
+            ICON_PATH,
+            LOGO_PATH,
+            VERTICAL_LOGO_PATH,
+            brand_logo,
+        )
 
         assert LOGO_PATH.is_file()
-        label = brand_logo(30)
-        assert label is not None
-        assert not label.pixmap().isNull()
+        assert VERTICAL_LOGO_PATH.is_file()
+        assert ICON_PATH.is_file()
+        for vertical in (False, True):
+            label = brand_logo(30, vertical=vertical)
+            assert label is not None
+            assert not label.pixmap().isNull()
+
+    def test_settings_round_trip(self, qapp):
+        win = MainWindow()
+        win.style_seg.set_value("pip-right")
+        win.duck_seg.set_value("-18")
+        win.blur_slider.setValue(83)
+        win.fmt_otio.setChecked(True)
+        win.lane_per_clip.setChecked(True)
+        win._save_settings()
+
+        fresh = MainWindow()
+        assert fresh.style_seg.value() == "pip-right"
+        assert fresh.duck_seg.value() == "-18"
+        assert fresh.blur_slider.value() == 83
+        assert fresh.fmt_otio.isChecked()
+        assert fresh.lane_per_clip.isChecked()
+        # blur slider disabled because the restored style isn't blur-bg
+        assert not fresh.blur_slider.isEnabled()
+        # reset stored state so later runs start from defaults
+        fresh._settings().clear()
+
+
+class TestAnimatedWidgets:
+    def test_hover_progress_animates(self, qapp):
+        from PySide6.QtCore import QAbstractAnimation
+        from editsync.gui.widgets import AnimatedButton
+
+        for kind in ("default", "primary", "ghost", "segment"):
+            btn = AnimatedButton("Test", kind=kind)
+            assert btn._hover.progress == 0.0
+            btn.enterEvent(enter_event())
+            assert btn._hover.state() == QAbstractAnimation.Running
+            btn._hover.setCurrentTime(btn._hover.duration())  # jump to end
+            assert btn._hover.progress == 1.0
+            btn.leaveEvent(leave_event())
+            btn._hover.setCurrentTime(btn._hover.duration())
+            assert btn._hover.progress == 0.0
+
+    def test_buttons_render_all_states(self, qapp):
+        from editsync.gui.widgets import AnimatedButton
+
+        for kind in ("default", "primary", "ghost", "segment"):
+            btn = AnimatedButton("Render me", kind=kind)
+            if kind == "segment":
+                btn.setCheckable(True)
+                btn.setChecked(True)
+            btn.resize(btn.sizeHint())
+            assert not btn.grab().isNull()
+            btn.setEnabled(False)
+            assert not btn.grab().isNull()
+
+    def test_dropzone_renders_and_signals(self, qapp):
+        from editsync.gui.widgets import DropZone
+
+        zone = DropZone()
+        zone.resize(400, 180)
+        assert not zone.grab().isNull()
+        # enter/leave drive the hover animation without crashing
+        zone.enterEvent(enter_event())
+        zone.leaveEvent(leave_event())
+        assert not zone.grab().isNull()
+
+    def test_segmented_set_value(self, qapp):
+        from editsync.gui.widgets import Segmented
+
+        seg = Segmented([("a", "A"), ("b", "B")], default="a")
+        changes = []
+        seg.changed.connect(changes.append)
+        seg.set_value("b")
+        assert seg.value() == "b"
+        assert changes == ["b"]
 
 
 @pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")

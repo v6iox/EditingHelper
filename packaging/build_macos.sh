@@ -26,6 +26,17 @@ fetch_tool() {
 fetch_tool ffmpeg
 fetch_tool ffprobe
 
+echo "==> Generating app icon (.icns)"
+ICONSET="$(mktemp -d)/EditSync.iconset"
+mkdir -p "$ICONSET"
+for size in 16 32 64 128 256 512; do
+    sips -z $size $size src/editsync/gui/assets/icon.png \
+        --out "$ICONSET/icon_${size}x${size}.png" >/dev/null
+    sips -z $((size*2)) $((size*2)) src/editsync/gui/assets/icon.png \
+        --out "$ICONSET/icon_${size}x${size}@2x.png" >/dev/null
+done
+iconutil -c icns "$ICONSET" -o packaging/icon.icns
+
 echo "==> Building EditSync.app"
 pyinstaller --noconfirm packaging/editsync.spec
 

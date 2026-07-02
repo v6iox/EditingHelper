@@ -54,6 +54,9 @@ locally on a Mac: `./packaging/build_macos.sh`.)*
 
 ## Good to know
 
+- **The app remembers your choices** — framing style, blur strength,
+  audio behavior, formats, and window size are restored next launch.
+
 - **Green markers** on clips say how confident the match was. A **red
   marker** means "double-check this one by ear."
 - If a clip couldn't be matched confidently, the app **leaves it out and

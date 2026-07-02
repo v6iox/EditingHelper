@@ -5,10 +5,11 @@ from __future__ import annotations
 import sys
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
 from .style import STYLESHEET
-from .window import MainWindow
+from .window import ICON_PATH, MainWindow
 
 
 def main() -> int:
@@ -18,6 +19,9 @@ def main() -> int:
     app = QApplication(sys.argv)
     app.setApplicationName("EditSync")
     app.setApplicationDisplayName("EditSync")
+    app.setOrganizationName("86 Auto Lab")
+    if ICON_PATH.is_file():
+        app.setWindowIcon(QIcon(str(ICON_PATH)))
     app.setStyleSheet(STYLESHEET)
 
     window = MainWindow()

@@ -44,15 +44,6 @@ QLabel#SectionLabel {{
 QLabel#Hint {{ color: {GRAY_DIM}; font-size: 11px; }}
 QLabel#BigStatus {{ font-size: 17px; font-weight: 600; }}
 
-QFrame#DropZone {{
-    background: {SURFACE};
-    border: 1px dashed {GRAY_DIM};
-    border-radius: 14px;
-}}
-QFrame#DropZone[dragOver="true"] {{
-    background: {SURFACE_2};
-    border: 1px dashed {WHITE};
-}}
 QLabel#DropTitle {{ font-size: 16px; font-weight: 600; }}
 QLabel#DropSub {{ color: {GRAY}; }}
 
@@ -62,10 +53,6 @@ QFrame#Card {{
     border-radius: 12px;
 }}
 
-QFrame#FileRow {{
-    background: transparent;
-    border-bottom: 1px solid {LINE_SOFT};
-}}
 QLabel#Badge {{
     background: {WHITE};
     color: {BLACK};
@@ -106,43 +93,6 @@ QPushButton {{
 QPushButton:hover {{ border-color: {GRAY}; }}
 QPushButton:pressed {{ background: {LINE_SOFT}; }}
 QPushButton:disabled {{ color: {GRAY_DIM}; border-color: {LINE_SOFT}; }}
-
-QPushButton#Primary {{
-    background: {WHITE};
-    color: {BLACK};
-    border: none;
-    border-radius: 10px;
-    padding: 12px 28px;
-    font-size: 14px;
-    font-weight: 700;
-}}
-QPushButton#Primary:hover {{ background: #ffffff; }}
-QPushButton#Primary:pressed {{ background: #d9d9d9; }}
-QPushButton#Primary:disabled {{ background: {LINE}; color: {GRAY_DIM}; }}
-
-QPushButton#Ghost {{
-    background: transparent;
-    border: none;
-    color: {GRAY};
-    padding: 4px 8px;
-    font-weight: 600;
-}}
-QPushButton#Ghost:hover {{ color: {WHITE}; }}
-
-QPushButton#Segment {{
-    background: transparent;
-    border: 1px solid {LINE};
-    border-radius: 8px;
-    padding: 7px 14px;
-    color: {GRAY};
-    font-weight: 600;
-}}
-QPushButton#Segment:checked {{
-    background: {WHITE};
-    color: {BLACK};
-    border-color: {WHITE};
-}}
-QPushButton#Segment:hover {{ border-color: {GRAY}; }}
 
 QLineEdit {{
     background: {SURFACE_2};

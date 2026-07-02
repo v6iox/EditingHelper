@@ -34,13 +34,19 @@ a = Analysis(
 )
 pyz = PYZ(a.pure)
 
+icon_file = None
+if sys.platform == "darwin" and (ROOT / "packaging" / "icon.icns").is_file():
+    icon_file = str(ROOT / "packaging" / "icon.icns")
+elif sys.platform == "win32" and (ROOT / "packaging" / "icon.ico").is_file():
+    icon_file = str(ROOT / "packaging" / "icon.ico")
+
 exe = EXE(
     pyz,
     a.scripts,
     exclude_binaries=True,
     name="EditSync",
     console=False,
-    icon=None,
+    icon=icon_file,
 )
 coll = COLLECT(
     exe,
@@ -53,10 +59,11 @@ if sys.platform == "darwin":
     app = BUNDLE(
         coll,
         name="EditSync.app",
-        bundle_identifier="com.editsync.app",
+        icon=icon_file,
+        bundle_identifier="com.86autolab.editsync",
         info_plist={
             "NSHighResolutionCapable": True,
-            "CFBundleShortVersionString": "0.1.0",
-            "NSHumanReadableCopyright": "MIT License",
+            "CFBundleShortVersionString": "1.0.0",
+            "NSHumanReadableCopyright": "© 86 Auto Lab — MIT License",
         },
     )

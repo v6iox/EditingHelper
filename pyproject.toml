@@ -4,12 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "editsync"
-version = "1.4.0"
+version = "1.5.0"
 description = "Audio-sync multicam footage (DJI + Meta glasses) into Final Cut Pro, Premiere, and OTIO timelines"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
-dependencies = ["numpy>=1.24"]
+# certifi: the packaged app's ssl module has no CA store without it,
+# which silently broke the update check on every machine
+dependencies = ["numpy>=1.24", "certifi"]
 
 [project.optional-dependencies]
 gui = ["PySide6>=6.6"]

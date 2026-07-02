@@ -43,7 +43,11 @@ def clean_settings():
 def no_network_update_check(monkeypatch):
     from editsync import updater
 
-    monkeypatch.setattr(updater, "check_for_update", lambda: None)
+    monkeypatch.setattr(
+        updater,
+        "check_for_update_detailed",
+        lambda: updater.CheckResult("current", detail=updater.__version__),
+    )
 
 
 @pytest.fixture

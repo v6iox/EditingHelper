@@ -2,6 +2,19 @@
 
 ## 1.5.0 — 2026-07-02
 
+- **Fixed: automatic update checks never worked in the packaged app.**
+  The app's bundled Python has no certificate store (macOS doesn't
+  expose its keychain to it), so every secure connection to GitHub
+  failed verification and the updater stayed silent. Certificates now
+  ship inside the app (certifi). Anyone on an older version needs to
+  download this release manually **once** — from here on the bottom-left
+  update prompt works.
+- **New: "Check for updates" button** in the footer of both modes. It
+  always tells you what happened: "You're up to date", "Version X is
+  ready" (with the install prompt), or the exact reason the check
+  failed (offline, GitHub rate limit, certificate problems, a release
+  whose downloads aren't finished uploading yet).
+
 - **Recreational mode — the studio.** A switcher in the top-right corner
   flips the app between its two sides. Training mode is the familiar
   one-button flow; Recreational mode opens your footage (still synced by

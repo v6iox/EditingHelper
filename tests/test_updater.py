@@ -80,3 +80,105 @@ class TestCheckForUpdate:
 
     def test_not_frozen_has_no_app_root(self):
         assert updater.current_app_root() is None
+
+
+class TestDetailedCheck:
+    """The visible check must say what happened, never just go quiet."""
+
+    def test_update_available(self, monkeypatch):
+        monkeypatch.setattr(updater, "__version__", "1.0.0", raising=False)
+        fake = _fake_release("v9.9.9", ["EditSync.dmg", "EditSync-windows.zip"])
+        with mock.patch.object(updater.urllib.request, "urlopen", return_value=fake), \
+             mock.patch.object(json, "load", side_effect=lambda r: json.loads(r.read())):
+            result = updater.check_for_update_detailed()
+        assert result.status == "update"
+        assert result.info is not None and result.info.version == "9.9.9"
+
+    def test_up_to_date_reports_current(self):
+        fake = _fake_release(f"v{updater.__version__}", ["EditSync.dmg"])
+        with mock.patch.object(updater.urllib.request, "urlopen", return_value=fake), \
+             mock.patch.object(json, "load", side_effect=lambda r: json.loads(r.read())):
+            result = updater.check_for_update_detailed()
+        assert result.status == "current"
+        assert result.detail == updater.__version__
+
+    def test_missing_asset_is_an_actionable_error(self, monkeypatch):
+        monkeypatch.setattr(updater, "__version__", "1.0.0", raising=False)
+        fake = _fake_release("v9.9.9", ["SomethingElse.zip"])
+        with mock.patch.object(updater.urllib.request, "urlopen", return_value=fake), \
+             mock.patch.object(json, "load", side_effect=lambda r: json.loads(r.read())):
+            result = updater.check_for_update_detailed()
+        assert result.status == "error"
+        assert "isn't ready yet" in result.detail
+
+    def test_offline_is_a_plain_language_error(self):
+        with mock.patch.object(
+            updater.urllib.request,
+            "urlopen",
+            side_effect=updater.urllib.error.URLError("no route to host"),
+        ):
+            result = updater.check_for_update_detailed()
+        assert result.status == "error"
+        assert "internet connection" in result.detail
+
+    def test_certificate_failure_is_called_out(self):
+        import ssl
+
+        with mock.patch.object(
+            updater.urllib.request,
+            "urlopen",
+            side_effect=updater.urllib.error.URLError(
+                ssl.SSLCertVerificationError("CERTIFICATE_VERIFY_FAILED")
+            ),
+        ):
+            result = updater.check_for_update_detailed()
+        assert result.status == "error"
+        assert "certificate" in result.detail.lower()
+
+    def test_rate_limit_is_explained(self):
+        err = updater.urllib.error.HTTPError(
+            updater.API_LATEST, 403, "rate limited", {}, io.BytesIO(b"")
+        )
+        with mock.patch.object(
+            updater.urllib.request, "urlopen", side_effect=err
+        ):
+            result = updater.check_for_update_detailed()
+        assert result.status == "error"
+        assert "rate-limiting" in result.detail
+
+    def test_wrapper_delegates_to_detailed(self, monkeypatch):
+        sentinel = updater.UpdateInfo("9.9.9", "v9.9.9", "u", "p")
+        monkeypatch.setattr(
+            updater,
+            "check_for_update_detailed",
+            lambda: updater.CheckResult("update", info=sentinel),
+        )
+        assert updater.check_for_update() is sentinel
+
+
+class TestSSLContext:
+    def test_context_uses_certifi_bundle(self):
+        import certifi
+        import ssl
+
+        context = updater._ssl_context()
+        assert isinstance(context, ssl.SSLContext)
+        # certifi must be importable — the packaged app has no other CAs
+        assert certifi.where()
+
+    def test_requests_pass_the_context(self):
+        """Both network calls must send our verified SSL context —
+        a bare urlopen has no CA store inside the packaged app."""
+        captured = {}
+
+        def fake_urlopen(request, timeout=None, context=None):
+            captured["context"] = context
+            raise updater.urllib.error.URLError("stop here")
+
+        with mock.patch.object(
+            updater.urllib.request, "urlopen", side_effect=fake_urlopen
+        ):
+            updater.check_for_update_detailed()
+        import ssl
+
+        assert isinstance(captured["context"], ssl.SSLContext)

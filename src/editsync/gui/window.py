@@ -41,7 +41,7 @@ from ..media import MediaFile, ProbeError, Role, require_tool
 from .recreational import RecreationalPage
 from .testmode import SecretTrigger, TestModeDialog
 from .title_picker import TitleStylePicker
-from .update import start_update_check
+from .update import UpdateFooter, UpdatePill, start_update_check
 from .widgets import AnimatedButton, DropZone, FileRow, Segmented, section_label
 from .worker import ProbeWorker, SyncJob, SyncOutcome, SyncWorker
 
@@ -133,6 +133,12 @@ class MainWindow(QWidget):
         self._load_settings()
         self._update_worker = start_update_check(self)
         self.mode_switch.reposition()
+
+    def show_update_pill(self, info) -> None:
+        """Show (or refresh) the bottom-left update prompt."""
+        if self.update_pill is not None:
+            self.update_pill.deleteLater()
+        self.update_pill = UpdatePill(info, self)
 
     def set_mode(self, mode: str) -> None:
         """Flip between the training flow and the recreational studio."""
@@ -404,10 +410,7 @@ class MainWindow(QWidget):
         bottom.addWidget(self.sync_btn)
         layout.addLayout(bottom)
 
-        footer = QLabel(f"EditSync {__version__} — 86 Auto Lab")
-        footer.setObjectName("Hint")
-        footer.setAlignment(Qt.AlignHCenter)
-        layout.addWidget(footer)
+        layout.addWidget(UpdateFooter())
         return page
 
     # ----------------------------------------------------------- working

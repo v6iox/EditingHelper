@@ -42,7 +42,11 @@ def no_network_update_check(monkeypatch):
     """Window construction must never hit the network in tests."""
     from editsync import updater
 
-    monkeypatch.setattr(updater, "check_for_update", lambda: None)
+    monkeypatch.setattr(
+        updater,
+        "check_for_update_detailed",
+        lambda: updater.CheckResult("current", detail=updater.__version__),
+    )
 
 
 def enter_event():
@@ -306,7 +310,11 @@ class TestUpdatePill:
         from editsync.gui import update as update_mod
 
         monkeypatch.setattr(
-            update_mod.updater, "check_for_update", lambda: None
+            update_mod.updater,
+            "check_for_update_detailed",
+            lambda: update_mod.updater.CheckResult(
+                "current", detail=update_mod.updater.__version__
+            ),
         )
         win = MainWindow()
         worker = update_mod.UpdateCheckWorker(win)
@@ -446,3 +454,62 @@ class TestBundledFfmpegLookup:
         fake.chmod(0o755)
         monkeypatch.setenv("EDITSYNC_FFMPEG_DIR", str(tmp_path))
         assert require_tool("ffmpeg") == str(fake)
+
+
+class TestUpdateFooter:
+    """The visible 'Check for updates' action reports every outcome."""
+
+    def _footer(self, monkeypatch, result):
+        from editsync.gui import update as update_mod
+
+        monkeypatch.setattr(
+            update_mod.updater, "check_for_update_detailed", lambda: result
+        )
+        footer = update_mod.UpdateFooter()
+        footer.check_btn.click()
+        footer._worker.wait(5000)
+        # deliver the queued signal from the worker thread
+        QApplication.processEvents()
+        return footer
+
+    def test_up_to_date_message(self, qapp, monkeypatch):
+        from editsync import updater
+
+        footer = self._footer(
+            monkeypatch, updater.CheckResult("current", detail="1.5.0")
+        )
+        assert "up to date" in footer.status.text()
+        assert "1.5.0" in footer.status.text()
+        assert footer.check_btn.isEnabled()
+
+    def test_error_is_shown_not_swallowed(self, qapp, monkeypatch):
+        from editsync import updater
+
+        footer = self._footer(
+            monkeypatch,
+            updater.CheckResult(
+                "error", detail="Couldn't reach GitHub — check your internet connection."
+            ),
+        )
+        assert "GitHub" in footer.status.text()
+
+    def test_update_found_shows_the_pill(self, qapp, monkeypatch):
+        from editsync import updater
+        from editsync.gui import update as update_mod
+
+        info = updater.UpdateInfo("9.9.9", "v9.9.9", "url", "page")
+        monkeypatch.setattr(
+            update_mod.updater,
+            "check_for_update_detailed",
+            lambda: updater.CheckResult("update", info=info),
+        )
+        win = MainWindow()
+        win.resize(1000, 700)
+        footer = win.setup_page.widget().findChild(update_mod.UpdateFooter)
+        assert footer is not None
+        footer.check_btn.click()
+        footer._worker.wait(5000)
+        QApplication.processEvents()
+        assert win.update_pill is not None
+        assert "9.9.9" in win.update_pill.label.text()
+        assert "9.9.9" in footer.status.text()

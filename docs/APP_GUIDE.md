@@ -118,6 +118,15 @@ corner at launch: **Update now** downloads it, replaces the app, and
 reopens it. Dismiss with ✕ to keep working; it reappears next launch
 until you update.
 
+You can also check on demand: **Check for updates** sits in the footer
+of both modes and always answers — "You're up to date", "Version X is
+ready" (the corner prompt appears), or the exact reason a check failed
+(offline, GitHub rate limits, and so on).
+
+> Versions **before 1.5.0** shipped with a broken update check (the
+> app couldn't verify GitHub's certificate), so they never offer
+> updates — download 1.5.0 or newer manually once and you're set.
+
 The repository is public, so the update check works for everyone with
 no setup. (If it is ever made private again, set `EDITSYNC_GITHUB_TOKEN`
 to a read-access token on each machine; without access the app simply

@@ -218,6 +218,10 @@ class RecreationalPage(QWidget):
         bottom.addWidget(self.intake_status, stretch=1)
         bottom.addWidget(self.open_btn)
         layout.addLayout(bottom)
+
+        from .update import UpdateFooter
+
+        layout.addWidget(UpdateFooter())
         return page
 
     # ------------------------------------------------------------- editor

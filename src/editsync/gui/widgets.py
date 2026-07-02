@@ -299,6 +299,9 @@ class FileRow(QWidget):
         elif media.role == Role.OVERLAY:
             badge.setText("OVERLAY")
             badge.setObjectName("BadgeOutline")
+        elif media.role == Role.MUSIC:
+            badge.setText("MUSIC")
+            badge.setObjectName("BadgeOutline")
         else:
             badge.setText("UNKNOWN")
             badge.setObjectName("BadgeDim")
@@ -309,9 +312,12 @@ class FileRow(QWidget):
 
         secs = float(media.duration)
         mins, s = divmod(int(secs), 60)
-        details = QLabel(
-            f"{media.display_width}×{media.display_height}  ·  {mins}:{s:02d}"
+        size_text = (
+            f"{media.display_width}×{media.display_height}  ·  "
+            if media.display_width > 0
+            else "audio  ·  "
         )
+        details = QLabel(f"{size_text}{mins}:{s:02d}")
         details.setObjectName("Hint")
 
         self.remove_btn = AnimatedButton("✕", kind="ghost")

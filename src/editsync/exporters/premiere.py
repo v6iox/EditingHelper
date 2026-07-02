@@ -54,13 +54,14 @@ class _Files:
         ET.SubElement(el, "pathurl").text = "file://localhost" + urllib.request.pathname2url(
             str(media.path)
         )
-        _rate_el(el, *_timebase(media.frame_rate))
+        _rate_el(el, *_timebase(media.frame_rate if media.frame_rate else seq_rate))
         ET.SubElement(el, "duration").text = str(_to_frames(media.duration, seq_rate))
         media_el = ET.SubElement(el, "media")
-        video = ET.SubElement(media_el, "video")
-        chars = ET.SubElement(video, "samplecharacteristics")
-        ET.SubElement(chars, "width").text = str(media.width)
-        ET.SubElement(chars, "height").text = str(media.height)
+        if media.width > 0:  # audio-only files (music) have no video section
+            video = ET.SubElement(media_el, "video")
+            chars = ET.SubElement(video, "samplecharacteristics")
+            ET.SubElement(chars, "width").text = str(media.width)
+            ET.SubElement(chars, "height").text = str(media.height)
         if media.has_audio:
             audio = ET.SubElement(media_el, "audio")
             achars = ET.SubElement(audio, "samplecharacteristics")
@@ -133,6 +134,8 @@ def export(timeline: Timeline, path: Path) -> None:
 
     audio = ET.SubElement(media_el, "audio")
     counter = 0
+    if timeline.music_clips:
+        audio_tracks.append(timeline.music_clips)
     for clips in audio_tracks:
         track = ET.SubElement(audio, "track")
         for clip in clips:

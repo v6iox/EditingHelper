@@ -41,6 +41,8 @@ class BuildOptions:
     preserve_gaps: bool = False  # keep real-world gaps between primary files
     overlay_style: str = "center"  # center | blur-bg | fill | pip-left | pip-right
     blur_amount: float = 50.0  # background blur strength for blur-bg, 0-100
+    music_db: float = -22.0  # background-music level under the dialogue
+    music_duck: bool = False  # mute the music while an overlay plays
     force_place: bool = False  # place low-confidence clips anyway (flagged)
     add_sync_markers: bool = True
     search_window: Optional[float] = None  # limit search via creation times, s
@@ -155,11 +157,42 @@ def _match_overlay(
     return find_clip_in_reference(ref_audio, tgt_audio, ref_env, tgt_env)
 
 
+def add_music(timeline: Timeline, music: MediaFile, opts: BuildOptions) -> None:
+    """Loop a music file under the whole timeline on lane -1.
+
+    Each pass of the file becomes its own clip (the last one trimmed), so
+    the editor can later swap, trim, or delete individual passes."""
+    fd = timeline.frame_duration
+    total = timeline.duration
+    if music.duration <= 0 or total <= 0:
+        return
+    pos = Fraction(0)
+    while pos < total:
+        chunk = min(music.duration, total - pos)
+        start_q = quantize(pos, fd)
+        dur_q = min(quantize(chunk, fd), total - start_q)
+        if dur_q <= 0:
+            break
+        timeline.clips.append(
+            TimelineClip(
+                media=music,
+                timeline_start=start_q,
+                duration=dur_q,
+                source_start=Fraction(0),
+                lane=-1,
+                role="Music",
+                volume_db=opts.music_db,
+            )
+        )
+        pos += music.duration
+
+
 def build(
     primaries: list[MediaFile],
     overlays: list[MediaFile],
     opts: BuildOptions,
     progress: Callable[[str], None] = lambda msg: None,
+    music: Optional[MediaFile] = None,
 ) -> BuildResult:
     if not primaries:
         raise ValueError("No primary (landscape/DJI) footage found to sync against.")
@@ -359,5 +392,15 @@ def build(
             BlurRegion(start=s, end=e, amount=opts.blur_amount)
             for s, e in overlay_intervals
         ]
+
+    # --- looping background music ---------------------------------------
+    if music is not None:
+        progress(f"Laying {music.path.name} under the timeline...")
+        add_music(timeline, music, opts)
+        if opts.music_duck:
+            timeline.music_duck_regions = [
+                DuckRegion(start=s, end=e, level_db=-96.0)
+                for s, e in overlay_intervals
+            ]
 
     return BuildResult(timeline=timeline, matches=matches, warnings=warnings)

@@ -194,6 +194,50 @@ def test_blur_background_style(footage, tmp_path):
     assert overlay.find("adjust-transform") is None
 
 
+def test_background_music(footage, tmp_path):
+    # a 20s sine "song" under 90s of video -> loops 5x (20*4 + 10)
+    song = tmp_path / "song.m4a"
+    subprocess.run(
+        ["ffmpeg", "-v", "error", "-y", "-f", "lavfi",
+         "-i", "sine=frequency=440:duration=20",
+         "-c:a", "aac", str(song)],
+        check=True,
+    )
+    out = tmp_path / "music.fcpxml"
+    rc = main(
+        [
+            "sync",
+            str(footage["root"]),
+            str(song),
+            "-o", str(out),
+            "--music", str(song),
+            "--music-volume", "-25",
+            "--music-duck",
+        ]
+    )
+    assert rc == 0
+    root = ET.fromstring(out.read_text().split("<!DOCTYPE fcpxml>")[1])
+    music_clips = [
+        c for c in root.iter("asset-clip")
+        if c.get("lane") is not None and int(c.get("lane")) < 0
+    ]
+    assert len(music_clips) == 5
+    # every pass carries the background level (static or keyframed baseline)
+    for clip in music_clips:
+        vol = clip.find("adjust-volume")
+        assert vol is not None
+        keyframes = vol.findall("./param/keyframe")
+        if keyframes:
+            values = {k.get("value") for k in keyframes}
+            assert "-25dB" in values and "-96dB" in values
+        else:
+            assert vol.get("amount") == "-25dB"
+    # --music-duck: at least one pass is keyframed down under an overlay
+    assert any(
+        c.find("adjust-volume/param") is not None for c in music_clips
+    )
+
+
 def test_probe_classification(footage, capsys):
     rc = main(["probe", str(footage["root"])])
     assert rc == 0

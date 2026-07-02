@@ -53,7 +53,24 @@ def cmd_sync(args) -> int:
     media = _classified(args)
     primaries = [m for m in media if m.role == Role.PRIMARY]
     overlays = [m for m in media if m.role == Role.OVERLAY]
+    music_files = [m for m in media if m.role == Role.MUSIC]
     unknown = [m for m in media if m.role == Role.UNKNOWN]
+
+    music = None
+    if args.music:
+        from .media import probe as _probe
+
+        music = next(
+            (m for m in music_files if m.path == Path(args.music).resolve()),
+            None,
+        ) or _probe(Path(args.music))
+    elif music_files:
+        print(
+            f"note: found audio file(s) "
+            f"{', '.join(m.path.name for m in music_files)}; pass "
+            f"--music <file> to loop one as background music",
+            file=sys.stderr,
+        )
     for m in unknown:
         print(
             f"warning: could not classify {m.path.name}; ignoring "
@@ -76,6 +93,8 @@ def cmd_sync(args) -> int:
         min_confidence=args.min_confidence,
         duck_db=None if args.duck.lower() in ("off", "none") else float(args.duck),
         lane_per_clip=args.lane_per_clip,
+        music_db=args.music_volume,
+        music_duck=args.music_duck,
         preserve_gaps=args.preserve_gaps,
         overlay_style=args.overlay_style,
         blur_amount=args.blur_amount,
@@ -85,7 +104,9 @@ def cmd_sync(args) -> int:
         max_workers=args.jobs,
     )
 
-    result = build(primaries, overlays, opts, progress=lambda msg: print(msg))
+    result = build(
+        primaries, overlays, opts, progress=lambda msg: print(msg), music=music
+    )
     print()
     print(text_report(result))
 
@@ -201,6 +222,24 @@ def main(argv: list[str] | None = None) -> int:
         "--duck",
         default="-60",
         help="dB level for primary audio under overlays, or 'off' (default: -60)",
+    )
+    p_sync.add_argument(
+        "--music",
+        metavar="FILE",
+        help="audio file to loop as background music under the whole video "
+        "(off unless given)",
+    )
+    p_sync.add_argument(
+        "--music-volume",
+        type=float,
+        default=-22.0,
+        metavar="DB",
+        help="background music level in dB (default: -22)",
+    )
+    p_sync.add_argument(
+        "--music-duck",
+        action="store_true",
+        help="mute the background music while an overlay clip plays",
     )
     p_sync.add_argument(
         "--min-confidence",

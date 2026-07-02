@@ -38,10 +38,14 @@ from PySide6.QtWidgets import (
 from .. import __version__
 from ..builder import BuildOptions
 from ..media import MediaFile, ProbeError, Role, require_tool
+from .update import start_update_check
 from .widgets import AnimatedButton, DropZone, FileRow, Segmented, section_label
 from .worker import ProbeWorker, SyncJob, SyncOutcome, SyncWorker
 
-VIDEO_FILTER = "Videos (*.mp4 *.mov *.m4v *.mts *.m2ts *.avi *.mkv)"
+VIDEO_FILTER = (
+    "Videos and music (*.mp4 *.mov *.m4v *.mts *.m2ts *.avi *.mkv "
+    "*.mp3 *.wav *.m4a *.aac *.flac *.aiff *.aif *.ogg)"
+)
 LOGO_PATH = Path(__file__).parent / "assets" / "logo.png"
 VERTICAL_LOGO_PATH = Path(__file__).parent / "assets" / "logo_vertical.png"
 ICON_PATH = Path(__file__).parent / "assets" / "icon.png"
@@ -80,6 +84,7 @@ class MainWindow(QWidget):
         self._sync_worker: SyncWorker | None = None
         self._output_dir: Path | None = None
         self._page_fade: QPropertyAnimation | None = None
+        self.update_pill = None  # set by start_update_check when out of date
 
         self.stack = QStackedWidget()
         outer = QVBoxLayout(self)
@@ -94,6 +99,12 @@ class MainWindow(QWidget):
         self.stack.addWidget(self.done_page)
 
         self._load_settings()
+        self._update_worker = start_update_check(self)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        if self.update_pill is not None:
+            self.update_pill.reposition()
 
     # ------------------------------------------------------------- setup
     def _build_setup_page(self) -> QWidget:
@@ -214,6 +225,42 @@ class MainWindow(QWidget):
             default="-60",
         )
         opt.addWidget(self.duck_seg)
+
+        opt.addWidget(section_label("Background music"))
+        self.music_enable = QCheckBox(
+            "Loop my music file quietly under the whole video"
+        )
+        self.music_enable.setToolTip(
+            "Drop a song (mp3, wav, m4a...) in with your footage, then turn "
+            "this on. It plays at background level so your voice stays clear."
+        )
+        self.music_enable.toggled.connect(self._on_music_toggled)
+        opt.addWidget(self.music_enable)
+
+        music_vol_row = QHBoxLayout()
+        self.music_vol_label = QLabel("Music volume")
+        self.music_vol_label.setObjectName("Hint")
+        self.music_vol_slider = QSlider(Qt.Horizontal)
+        self.music_vol_slider.setRange(-40, -8)
+        self.music_vol_slider.setValue(-22)
+        self.music_vol_slider.setMaximumWidth(240)
+        self.music_vol_value = QLabel("-22 dB")
+        self.music_vol_value.setObjectName("Hint")
+        self.music_vol_slider.valueChanged.connect(
+            lambda v: self.music_vol_value.setText(f"{v} dB")
+        )
+        music_vol_row.addWidget(self.music_vol_label)
+        music_vol_row.addWidget(self.music_vol_slider)
+        music_vol_row.addWidget(self.music_vol_value)
+        music_vol_row.addStretch(1)
+        opt.addLayout(music_vol_row)
+
+        self.music_duck = QCheckBox("Silence the music while a glasses clip plays")
+        opt.addWidget(self.music_duck)
+        self.music_hint = QLabel("Add a music file above to enable this.")
+        self.music_hint.setObjectName("Hint")
+        opt.addWidget(self.music_hint)
+        self._on_music_toggled(False)
 
         opt.addWidget(section_label("Save for"))
         fmt_row = QHBoxLayout()
@@ -367,6 +414,21 @@ class MainWindow(QWidget):
         self.blur_slider.setEnabled(is_blur)
         self.blur_value.setEnabled(is_blur)
 
+    def _music_file(self) -> MediaFile | None:
+        return next((m for m in self.media if m.role == Role.MUSIC), None)
+
+    def _on_music_toggled(self, on: bool) -> None:
+        has_music = self._music_file() is not None
+        self.music_enable.setEnabled(has_music)
+        for w in (
+            self.music_vol_label,
+            self.music_vol_slider,
+            self.music_vol_value,
+            self.music_duck,
+        ):
+            w.setEnabled(has_music and on)
+        self.music_hint.setVisible(not has_music)
+
     # ------------------------------------------------------- file intake
     def _browse(self) -> None:
         files, _ = QFileDialog.getOpenFileNames(
@@ -422,9 +484,12 @@ class MainWindow(QWidget):
         self.drop_zone.setMinimumHeight(110 if self.media else 180)
         primaries = [m for m in self.media if m.role == Role.PRIMARY]
         overlays = [m for m in self.media if m.role == Role.OVERLAY]
-        self.files_label.setText(
-            f"FOOTAGE — {len(primaries)} MAIN CAM, {len(overlays)} OVERLAY"
-        )
+        music = [m for m in self.media if m.role == Role.MUSIC]
+        label = f"FOOTAGE — {len(primaries)} MAIN CAM, {len(overlays)} OVERLAY"
+        if music:
+            label += f", {len(music)} MUSIC"
+        self.files_label.setText(label)
+        self._on_music_toggled(self.music_enable.isChecked())
         ready = bool(primaries) and bool(overlays)
         self.sync_btn.setEnabled(ready)
         if not self.media:
@@ -474,12 +539,15 @@ class MainWindow(QWidget):
             overlay_style=self.style_seg.value(),
             blur_amount=float(self.blur_slider.value()),
             lane_per_clip=self.lane_per_clip.isChecked(),
+            music_db=float(self.music_vol_slider.value()),
+            music_duck=self.music_duck.isChecked(),
         )
         job = SyncJob(
             media=list(self.media),
             options=options,
             formats=formats,
             output_dir=self._output_dir,
+            music=self._music_file() if self.music_enable.isChecked() else None,
         )
         self._save_settings()
         self._go(self.working_page)
@@ -559,6 +627,8 @@ class MainWindow(QWidget):
         self.fmt_premiere.setChecked(s.value("fmt_premiere", False, type=bool))
         self.fmt_otio.setChecked(s.value("fmt_otio", False, type=bool))
         self.lane_per_clip.setChecked(s.value("lane_per_clip", False, type=bool))
+        self.music_vol_slider.setValue(s.value("music_db", -22, type=int))
+        self.music_duck.setChecked(s.value("music_duck", False, type=bool))
         geometry = s.value("geometry")
         if geometry is not None:
             self.restoreGeometry(geometry)
@@ -572,6 +642,8 @@ class MainWindow(QWidget):
         s.setValue("fmt_premiere", self.fmt_premiere.isChecked())
         s.setValue("fmt_otio", self.fmt_otio.isChecked())
         s.setValue("lane_per_clip", self.lane_per_clip.isChecked())
+        s.setValue("music_db", self.music_vol_slider.value())
+        s.setValue("music_duck", self.music_duck.isChecked())
         s.setValue("geometry", self.saveGeometry())
 
     def closeEvent(self, event) -> None:

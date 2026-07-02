@@ -16,9 +16,10 @@ Download from the project's **GitHub Releases** page:
 The app includes everything it needs (ffmpeg is bundled) — nothing else to
 install, no terminal, ever.
 
-> **First launch on a Mac**: the app isn't signed with an Apple developer
-> certificate, so macOS will warn you. **Right-click the app → Open →
-> Open**. You only need to do this once.
+> **First launch on a Mac**: releases built after code signing was set
+> up (see docs/SIGNING.md) open with a normal double-click. If you have
+> an older unsigned build and macOS warns you, **right-click the app →
+> Open → Open** — one time only.
 
 *(Maintainers: releases are built automatically — push a tag like `v0.1.0`
 or run the "Build desktop app" workflow on GitHub Actions. To build

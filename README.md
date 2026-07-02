@@ -6,6 +6,10 @@ built for the **DJI Action (horizontal, always recording)** +
 **Final Cut Pro** first, with Premiere Pro and OpenTimelineIO exports for
 portability to other editors.
 
+**Download the app:** grab `EditSync.dmg` (Mac) or `EditSync-windows.zip`
+(Windows) from the [Releases page](../../releases/latest). No setup —
+ffmpeg is bundled. Mac first launch: right-click → Open (unsigned app).
+
 Comes in two flavors:
 
 - **The EditSync app** — a downloadable black-and-white desktop app:

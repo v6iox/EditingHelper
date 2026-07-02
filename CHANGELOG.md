@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.2.0 — 2026-07-02
+
+- **Opening title card** for training videos: a title (panel/procedure)
+  with a description line under it (year/make/model) on a white
+  full-frame card at the start of the video, fading out at an
+  adjustable speed to reveal the footage already playing. Four
+  arrangements with live visual previews in the app — Classic,
+  Lower left, Statement, Elegant. Empty title = no card. CLI:
+  `--title`, `--title-description`, `--title-style`, `--title-hold`,
+  `--title-fade`.
+- **Every setting now persists** across app restarts: project name,
+  title card text/style/timing, framing, blur, audio behavior, music
+  options, formats, layers, and window layout.
+- The update check now works out of the box for everyone (the
+  repository is public).
+
 ## 1.1.0 — 2026-07-02
 
 - **Background music** (off by default): drop a song in with your

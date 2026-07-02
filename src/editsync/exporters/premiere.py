@@ -5,6 +5,8 @@ track V1, overlay lanes become V2+, and every clip carries linked audio on
 the matching audio track. Audio ducking is not expressed here (xmeml level
 keyframes are unreliable across Premiere versions); the sync report lists
 the overlay intervals so ducking can be applied with Essential Sound.
+Opening title cards are likewise FCPXML-only (xmeml has no portable title
+element) — the CLI and app warn when a title would be dropped.
 """
 
 from __future__ import annotations

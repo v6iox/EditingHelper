@@ -102,6 +102,12 @@ editsync sync ./footage -o myvideo.fcpxml --search-window 120
   `fill` (scale to fill), `pip-left` / `pip-right` picture-in-picture.
 - **Minimal or one-lane-per-clip layering** — overlapping overlays never
   collide; `--lane-per-clip` gives every clip its own layer if you prefer.
+- **Opening title cards** — `--title "Front Bumper Removal"
+  --title-description "2024 Toyota GR86"` puts a white card with the
+  title and description at the start, fading out over `--title-fade`
+  seconds after `--title-hold`; four text arrangements via
+  `--title-style` (live previews in the app). FCPXML-only — the CLI and
+  app warn if a Premiere export would drop it.
 - **Background music** — loop a song under the whole video at background
   level (`--music song.mp3 --music-volume -22`), each pass its own
   trimmable clip on a layer below; `--music-duck` silences it under

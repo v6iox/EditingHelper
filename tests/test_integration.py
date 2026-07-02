@@ -238,6 +238,51 @@ def test_background_music(footage, tmp_path):
     )
 
 
+def test_title_card_end_to_end(footage, tmp_path):
+    out = tmp_path / "titled.fcpxml"
+    rc = main(
+        [
+            "sync",
+            str(footage["dji"]),
+            str(footage["meta1"]),
+            "-o", str(out),
+            "--title", "Front Bumper Removal",
+            "--title-description", "2024 Toyota GR86",
+            "--title-style", "statement",
+            "--title-hold", "2",
+            "--title-fade", "0.5",
+        ]
+    )
+    assert rc == 0
+    assert (tmp_path / "titled_title_background.png").exists()
+    root = ET.fromstring(out.read_text().split("<!DOCTYPE fcpxml>")[1])
+    title = root.find(".//title")
+    assert title is not None
+    assert root.find(".//title/text/text-style").text == "FRONT BUMPER REMOVAL\n"
+    keyframes = title.findall("./adjust-blend/param/keyframe")
+    assert keyframes[0].get("time") == "2s"
+    assert keyframes[1].get("time") == "5/2s"
+    # the card floats above the overlay lane
+    video_bg = root.find(".//asset-clip/video")
+    assert int(video_bg.get("lane")) >= 2
+
+
+def test_premiere_title_warning(footage, tmp_path, capsys):
+    rc = main(
+        [
+            "sync",
+            str(footage["dji"]),
+            str(footage["meta1"]),
+            "-o", str(tmp_path / "p"),
+            "-f", "premiere",
+            "--title", "Front Bumper Removal",
+        ]
+    )
+    assert rc == 0
+    err = capsys.readouterr().err
+    assert "title card" in err and "Final Cut" in err
+
+
 def test_probe_classification(footage, capsys):
     rc = main(["probe", str(footage["root"])])
     assert rc == 0

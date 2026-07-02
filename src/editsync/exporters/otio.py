@@ -114,6 +114,15 @@ def export(timeline: Timeline, path: Path) -> None:
             _track("Background Music", timeline.music_clips, rate, kind="Audio")
         )
 
+    title_meta = None
+    if timeline.title_card is not None:
+        card = timeline.title_card
+        title_meta = {
+            "title": card.title,
+            "description": card.description,
+            "hold_seconds": float(card.hold),
+            "fade_seconds": float(card.fade),
+        }
     doc = {
         "OTIO_SCHEMA": "Timeline.1",
         "name": timeline.name,
@@ -145,6 +154,7 @@ def export(timeline: Timeline, path: Path) -> None:
                     }
                     for r in timeline.blur_regions
                 ],
+                "title_card": title_meta,
                 "music_duck_regions": [
                     {
                         "start": float(r.start),

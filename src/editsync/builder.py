@@ -23,6 +23,7 @@ from .timeline import (
     Marker,
     Timeline,
     TimelineClip,
+    TitleCard,
     assign_lanes,
     merge_intervals,
     quantize,
@@ -43,6 +44,11 @@ class BuildOptions:
     blur_amount: float = 50.0  # background blur strength for blur-bg, 0-100
     music_db: float = -22.0  # background-music level under the dialogue
     music_duck: bool = False  # mute the music while an overlay plays
+    title_text: str = ""  # opening title; empty = no title card
+    title_description: str = ""  # line under the title (year/make/model)
+    title_hold: float = 3.0  # seconds the card stays fully visible
+    title_fade: float = 1.0  # seconds the card takes to fade out
+    title_style: str = "classic"  # arrangement preset (editsync.titles)
     force_place: bool = False  # place low-confidence clips anyway (flagged)
     add_sync_markers: bool = True
     search_window: Optional[float] = None  # limit search via creation times, s
@@ -392,6 +398,20 @@ def build(
             BlurRegion(start=s, end=e, amount=opts.blur_amount)
             for s, e in overlay_intervals
         ]
+
+    # --- opening title card ----------------------------------------------
+    if opts.title_text.strip():
+        timeline.title_card = TitleCard(
+            title=opts.title_text.strip(),
+            description=opts.title_description.strip(),
+            hold=max(
+                fd, quantize(Fraction(opts.title_hold).limit_denominator(100), fd)
+            ),
+            fade=max(
+                fd, quantize(Fraction(opts.title_fade).limit_denominator(100), fd)
+            ),
+            style=opts.title_style,
+        )
 
     # --- looping background music ---------------------------------------
     if music is not None:

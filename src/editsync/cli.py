@@ -95,6 +95,11 @@ def cmd_sync(args) -> int:
         lane_per_clip=args.lane_per_clip,
         music_db=args.music_volume,
         music_duck=args.music_duck,
+        title_text=args.title,
+        title_description=args.title_description,
+        title_style=args.title_style,
+        title_hold=args.title_hold,
+        title_fade=args.title_fade,
         preserve_gaps=args.preserve_gaps,
         overlay_style=args.overlay_style,
         blur_amount=args.blur_amount,
@@ -127,6 +132,12 @@ def cmd_sync(args) -> int:
         out = out_base if out_base.suffix and len(formats) == 1 else out_base.with_suffix(ext)
         exporters.export(fmt, result.timeline, out)
         print(f"Wrote {fmt}: {out}")
+    if result.timeline.title_card is not None and "premiere" in formats:
+        print(
+            "note: the opening title card is included in the Final Cut Pro "
+            "export only; Premiere's interchange format cannot carry it.",
+            file=sys.stderr,
+        )
 
     unplaced = [m for m in result.matches if not m.placed]
     if unplaced:
@@ -235,6 +246,36 @@ def main(argv: list[str] | None = None) -> int:
         default=-22.0,
         metavar="DB",
         help="background music level in dB (default: -22)",
+    )
+    p_sync.add_argument(
+        "--title",
+        default="",
+        help="opening title text shown over a white card that fades out",
+    )
+    p_sync.add_argument(
+        "--title-description",
+        default="",
+        help="line under the title (e.g. year/make/model)",
+    )
+    p_sync.add_argument(
+        "--title-style",
+        default="classic",
+        choices=["classic", "lower-left", "statement", "elegant"],
+        help="arrangement of the title text on the card (default: classic)",
+    )
+    p_sync.add_argument(
+        "--title-hold",
+        type=float,
+        default=3.0,
+        metavar="SECONDS",
+        help="how long the title card stays fully visible (default: 3)",
+    )
+    p_sync.add_argument(
+        "--title-fade",
+        type=float,
+        default=1.0,
+        metavar="SECONDS",
+        help="how long the fade-out takes (default: 1)",
     )
     p_sync.add_argument(
         "--music-duck",

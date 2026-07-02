@@ -46,16 +46,27 @@ jobs:
             exit 0
           fi
           echo "$CERT_B64" | base64 --decode > /tmp/cert.p12
+          # Normalize the p12 to classic ciphers (SHA1 MAC + 3DES bags):
+          # OpenSSL 3 exports use PBES2/AES, which macOS `security import`
+          # rejects with a misleading "MAC verification failed" error.
+          openssl pkcs12 -in /tmp/cert.p12 -passin env:CERT_PASSWORD \
+              -nodes -out /tmp/bundle.pem 2>/dev/null \
+            || openssl pkcs12 -legacy -in /tmp/cert.p12 \
+              -passin env:CERT_PASSWORD -nodes -out /tmp/bundle.pem
+          openssl pkcs12 -export -in /tmp/bundle.pem \
+            -passout env:CERT_PASSWORD \
+            -certpbe PBE-SHA1-3DES -keypbe PBE-SHA1-3DES -macalg sha1 \
+            -name "Developer ID Application" -out /tmp/cert_compat.p12
           KEYCHAIN_PASS="$(uuidgen)"
           security create-keychain -p "$KEYCHAIN_PASS" build.keychain
           security default-keychain -s build.keychain
           security unlock-keychain -p "$KEYCHAIN_PASS" build.keychain
           security set-keychain-settings -t 3600 build.keychain
-          security import /tmp/cert.p12 -k build.keychain \
+          security import /tmp/cert_compat.p12 -k build.keychain \
             -P "$CERT_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple: \
             -s -k "$KEYCHAIN_PASS" build.keychain
-          rm /tmp/cert.p12
+          rm -f /tmp/cert.p12 /tmp/bundle.pem /tmp/cert_compat.p12
           IDENTITY="$(security find-identity -v -p codesigning build.keychain \
             | grep 'Developer ID Application' | head -1 \
             | sed -E 's/.*"(.+)"$/\1/')"

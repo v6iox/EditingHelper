@@ -57,9 +57,12 @@ if ! printf '%s' "$SUBJECT" | grep -q "Developer ID Application"; then
 fi
 TEAM_ID="$(printf '%s' "$SUBJECT" | sed -n 's/.*OU *= *\([A-Z0-9]\{10\}\).*/\1/p')"
 P12_PASSWORD="$(openssl rand -hex 12)"
+# classic ciphers so macOS `security import` accepts the file regardless
+# of which openssl (LibreSSL or OpenSSL 3) generated it
 openssl pkcs12 -export \
     -inkey editsync_signing_key.pem -in cert.pem \
     -name "Developer ID Application" \
+    -certpbe PBE-SHA1-3DES -keypbe PBE-SHA1-3DES -macalg sha1 \
     -out EditSync.p12 -passout pass:"$P12_PASSWORD"
 CERT_B64="$(base64 -i EditSync.p12)"
 echo "Certificate OK — Team ID: $TEAM_ID"

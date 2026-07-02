@@ -159,7 +159,7 @@ enum CompositionBuilder {
             start: .zero,
             duration: CMTime(seconds: plan.totalDuration, preferredTimescale: 600))
         // first layer instruction renders on top
-        instruction.layerInstructions = overlayLayers.reversed() + [primaryLayer]
+        instruction.layerInstructions = Array(overlayLayers.reversed()) + [primaryLayer]
 
         let videoComposition = AVMutableVideoComposition()
         videoComposition.renderSize = renderSize

@@ -1,6 +1,7 @@
 // The live viewer: instant playback of the composed edit (no rendering
 // wait), then one tap to save the finalized video to the camera roll.
 import AVKit
+import CoreText
 import SwiftUI
 
 struct PreviewView: View {
@@ -134,11 +135,11 @@ struct TitleCardPreview: View {
                 Color.white
                 VStack(spacing: 8) {
                     Text(l.titleText)
-                        .font(Font(l.titleFont))
+                        .font(Font(l.titleFont as CTFont))
                         .foregroundStyle(Color.black)
                     if !l.descText.isEmpty {
                         Text(l.descText)
-                            .font(Font(l.descFont))
+                            .font(Font(l.descFont as CTFont))
                             .foregroundStyle(Color(l.descColor))
                     }
                 }

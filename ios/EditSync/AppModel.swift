@@ -3,6 +3,7 @@ import AVFoundation
 import Photos
 import PhotosUI
 import SwiftUI
+import UniformTypeIdentifiers
 
 @MainActor
 final class AppModel: ObservableObject {

@@ -21,6 +21,8 @@ from pathlib import Path
 from typing import Optional
 
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".m4v", ".mts", ".m2ts", ".avi", ".mkv"}
+AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".aac", ".flac", ".aiff", ".aif", ".ogg"}
+MEDIA_EXTENSIONS = VIDEO_EXTENSIONS | AUDIO_EXTENSIONS
 
 PRIMARY_NAME_HINTS = ("dji", "osmo", "action")
 OVERLAY_NAME_HINTS = ("meta", "rayban", "ray-ban", "glasses", "stories", "aria")
@@ -31,6 +33,7 @@ OVERLAY_META_HINTS = ("meta", "ray-ban", "rayban", "luxottica", "essilor")
 class Role(Enum):
     PRIMARY = "primary"
     OVERLAY = "overlay"
+    MUSIC = "music"
     UNKNOWN = "unknown"
 
 
@@ -182,21 +185,26 @@ def probe(path: Path) -> MediaFile:
         (s for s in data.get("streams", []) if s.get("codec_type") == "audio"),
         None,
     )
-    if video is None:
-        raise ProbeError(f"No video stream in {path}")
+    if video is None and audio is None:
+        raise ProbeError(f"No audio or video stream in {path}")
 
     fmt = data.get("format", {})
     fmt_tags = {k.lower(): v for k, v in (fmt.get("tags") or {}).items()}
-    video_tags = {k.lower(): v for k, v in (video.get("tags") or {}).items()}
+    video_tags = {k.lower(): v for k, v in ((video or {}).get("tags") or {}).items()}
     all_tags = {**video_tags, **fmt_tags}
 
+    if video is None:  # audio-only file (e.g. background music)
+        video = {}
+        frame_rate = Fraction(0)
+    else:
+        frame_rate = _parse_fraction(
+            video.get("avg_frame_rate") or video.get("r_frame_rate") or "30",
+            Fraction(30),
+        )
+        if frame_rate <= 0:
+            frame_rate = _parse_fraction(video.get("r_frame_rate") or "30", Fraction(30))
+
     duration_text = fmt.get("duration") or video.get("duration") or "0"
-    frame_rate = _parse_fraction(
-        video.get("avg_frame_rate") or video.get("r_frame_rate") or "30",
-        Fraction(30),
-    )
-    if frame_rate <= 0:
-        frame_rate = _parse_fraction(video.get("r_frame_rate") or "30", Fraction(30))
 
     make = all_tags.get("make", "") or all_tags.get("com.apple.quicktime.make", "")
     model = all_tags.get("model", "") or all_tags.get("com.apple.quicktime.model", "")
@@ -218,12 +226,13 @@ def probe(path: Path) -> MediaFile:
 
 
 def collect_video_files(inputs: list[Path]) -> list[Path]:
-    """Expand files/directories into a sorted, de-duplicated list of videos."""
+    """Expand files/directories into a sorted, de-duplicated media list
+    (video clips plus audio files, which can serve as background music)."""
     found: list[Path] = []
     for item in inputs:
         if item.is_dir():
             for child in sorted(item.rglob("*")):
-                if child.is_file() and child.suffix.lower() in VIDEO_EXTENSIONS:
+                if child.is_file() and child.suffix.lower() in MEDIA_EXTENSIONS:
                     found.append(child)
         elif item.is_file():
             found.append(item)
@@ -257,7 +266,9 @@ def classify(
         name = m.path.name
         meta_text = f"{m.make} {m.model}".lower()
 
-        if primary_patterns and _matches_any(name, primary_patterns):
+        if m.width == 0 and m.has_audio:
+            m.role, m.role_reason = Role.MUSIC, "audio-only file"
+        elif primary_patterns and _matches_any(name, primary_patterns):
             m.role, m.role_reason = Role.PRIMARY, "matched --primary pattern"
         elif overlay_patterns and _matches_any(name, overlay_patterns):
             m.role, m.role_reason = Role.OVERLAY, "matched --overlay pattern"

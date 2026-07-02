@@ -37,6 +37,14 @@ def clean_settings():
     MainWindow._settings().clear()
 
 
+@pytest.fixture(autouse=True)
+def no_network_update_check(monkeypatch):
+    """Window construction must never hit the network in tests."""
+    from editsync import updater
+
+    monkeypatch.setattr(updater, "check_for_update", lambda: None)
+
+
 def enter_event():
     from PySide6.QtCore import QPointF
     from PySide6.QtGui import QEnterEvent
@@ -139,6 +147,82 @@ class TestMainWindow:
         assert not fresh.blur_slider.isEnabled()
         # reset stored state so later runs start from defaults
         fresh._settings().clear()
+
+
+class TestMusicControls:
+    def test_disabled_without_music_file(self, qapp, make_media):
+        win = MainWindow()
+        win._on_file_ready(make_media(name="DJI_0001.mp4", role=Role.PRIMARY))
+        win._refresh_summary()
+        assert not win.music_enable.isEnabled()
+        assert win.music_hint.isVisibleTo(win)
+
+    def test_enabled_with_music_file(self, qapp, make_media):
+        from fractions import Fraction
+
+        win = MainWindow()
+        song = make_media(name="song.mp3", width=0, height=0, duration=30.0)
+        song.frame_rate = Fraction(0)
+        song.role = Role.MUSIC
+        win._on_file_ready(song)
+        win._refresh_summary()
+        assert win.music_enable.isEnabled()
+        assert not win.music_enable.isChecked()  # off by default
+        assert not win.music_duck.isEnabled()  # gated on the main toggle
+        win.music_enable.setChecked(True)
+        assert win.music_duck.isEnabled()
+        assert not win.music_duck.isChecked()  # also off by default
+        assert win.music_vol_slider.value() == -22
+        assert win._music_file() is song
+
+    def test_music_badge(self, qapp, make_media):
+        from fractions import Fraction
+        from editsync.gui.widgets import FileRow
+
+        song = make_media(name="song.mp3", width=0, height=0, duration=30.0)
+        song.frame_rate = Fraction(0)
+        song.role = Role.MUSIC
+        row = FileRow(song)
+        assert not row.grab().isNull()
+
+
+class TestUpdatePill:
+    def test_pill_appears_bottom_left_and_dismisses(self, qapp):
+        from editsync.gui.update import MARGIN, UpdatePill
+        from editsync.updater import UpdateInfo
+
+        win = MainWindow()
+        win.resize(800, 700)
+        win.show()
+        info = UpdateInfo(
+            version="9.9.9",
+            tag="v9.9.9",
+            asset_url="https://example.com/asset",
+            page_url="https://example.com/releases",
+        )
+        pill = UpdatePill(info, win)
+        assert "9.9.9" in pill.label.text()
+        assert pill.x() == MARGIN
+        assert pill.y() == win.height() - pill.height() - MARGIN
+        # reposition follows the window
+        win.resize(900, 800)
+        pill.reposition()
+        assert pill.y() == win.height() - pill.height() - MARGIN
+        pill.hide()
+        assert not pill.isVisible()
+
+    def test_no_pill_when_up_to_date(self, qapp, monkeypatch):
+        from editsync.gui import update as update_mod
+
+        monkeypatch.setattr(
+            update_mod.updater, "check_for_update", lambda: None
+        )
+        win = MainWindow()
+        worker = update_mod.UpdateCheckWorker(win)
+        results = []
+        worker.found.connect(results.append)
+        worker.run()
+        assert results == []
 
 
 class TestAnimatedWidgets:

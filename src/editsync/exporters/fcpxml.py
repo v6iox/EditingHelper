@@ -91,9 +91,6 @@ class _Resources:
     def asset_id(self, media: MediaFile) -> str:
         key = str(media.path)
         if key not in self._assets:
-            fmt_id = self.format_id(
-                media.width, media.height, media.frame_duration
-            )
             rid = self._new_id("r")
             asset = ET.SubElement(
                 self.el,
@@ -103,9 +100,13 @@ class _Resources:
                 uid=_asset_uid(media.path),
                 start="0s",
                 duration=fmt_time(media.duration),
-                hasVideo="1",
-                format=fmt_id,
             )
+            if media.width > 0:  # audio-only files carry no video/format
+                asset.set("hasVideo", "1")
+                asset.set(
+                    "format",
+                    self.format_id(media.width, media.height, media.frame_duration),
+                )
             if media.has_audio:
                 asset.set("hasAudio", "1")
                 asset.set("audioSources", "1")
@@ -281,7 +282,8 @@ def build_tree(timeline: Timeline) -> ET.ElementTree:
     primaries = timeline.primary_clips
     overlays = timeline.overlay_clips
     children: dict[int, list[TimelineClip]] = {id(p): [] for p in primaries}
-    for o in overlays:
+    # music clips connect below the storyline exactly like overlays above it
+    for o in overlays + timeline.music_clips:
         children[id(_overlay_parent(o, primaries))].append(o)
 
     fade = Fraction(1, 4)
@@ -333,14 +335,37 @@ def build_tree(timeline: Timeline) -> ET.ElementTree:
                 name=o.media.name,
                 start=fmt_time(o.source_start),
                 duration=fmt_time(o.duration),
-                format=resources.format_id(
-                    o.media.width, o.media.height, o.media.frame_duration
-                ),
                 tcFormat="NDF",
             )
-            if o.role:
+            if o.media.width > 0:
+                o_el.set(
+                    "format",
+                    resources.format_id(
+                        o.media.width, o.media.height, o.media.frame_duration
+                    ),
+                )
+            if o.lane < 0:
+                o_el.set("audioRole", "music")
+            elif o.role:
                 o_el.set("audioRole", f"dialogue.{o.role}")
             _add_transform(o_el, o)
+            if o.volume_db is not None:
+                mute_keyframes = _region_keyframes(
+                    o,
+                    [
+                        (r.start, r.end, r.level_db)
+                        for r in timeline.music_duck_regions
+                    ],
+                    fade,
+                    rest_value=o.volume_db,
+                    pick=min,
+                )
+                if mute_keyframes:
+                    _add_volume_keyframes(o_el, mute_keyframes)
+                else:
+                    ET.SubElement(
+                        o_el, "adjust-volume", amount=fmt_db(o.volume_db)
+                    )
             _add_markers(o_el, o, timeline.frame_duration)
 
         _add_markers(p_el, p, timeline.frame_duration)

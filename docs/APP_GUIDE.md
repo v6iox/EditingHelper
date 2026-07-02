@@ -40,6 +40,13 @@ locally on a Mac: `./packaging/build_macos.sh`.)*
      corner. (Just a starting point; you can change it in Final Cut.)
    - **While a glasses clip plays** — mute the main camera, turn it down,
      or leave it alone.
+   - **Background music** (off unless you turn it on) — drop a song
+     (mp3, wav, m4a…) in with your footage and check "Loop my music
+     file quietly under the whole video". It repeats for the full
+     length of the video on its own layer underneath, at background
+     level (there's a volume slider), so your voice stays clear. A
+     second switch, also off by default, **silences the music while a
+     glasses clip plays** and fades it back in after.
    - **Save for** — Final Cut Pro, Premiere Pro, and/or DaVinci Resolve.
 
 3. **Press "Sync my footage"**, choose where to save, and wait — the app
@@ -52,6 +59,20 @@ locally on a Mac: `./packaging/build_macos.sh`.)*
      own sound,
    - each clip freely trimmable/extendable — sync is not lost when you
      drag its edges, because the clip's media is already aligned.
+
+## Updates
+
+When a newer version exists, a small prompt appears in the bottom-left
+corner at launch: **Update now** downloads it, replaces the app, and
+reopens it. Dismiss with ✕ to keep working; it reappears next launch
+until you update.
+
+> **Note for private repositories:** the update check reads this
+> repository's Releases. While the repo is private, the app can only
+> see them if the `EDITSYNC_GITHUB_TOKEN` environment variable holds a
+> GitHub token with read access (or if the repo is made public — then
+> it works for everyone with no setup). Without access the app simply
+> never shows the prompt; nothing breaks.
 
 ## Good to know
 

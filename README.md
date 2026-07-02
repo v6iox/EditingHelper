@@ -102,6 +102,12 @@ editsync sync ./footage -o myvideo.fcpxml --search-window 120
   `fill` (scale to fill), `pip-left` / `pip-right` picture-in-picture.
 - **Minimal or one-lane-per-clip layering** — overlapping overlays never
   collide; `--lane-per-clip` gives every clip its own layer if you prefer.
+- **Background music** — loop a song under the whole video at background
+  level (`--music song.mp3 --music-volume -22`), each pass its own
+  trimmable clip on a layer below; `--music-duck` silences it under
+  glasses clips with smooth fades. Both off by default.
+- **Auto-updates** — the app offers one-click self-update from the
+  bottom-left corner when a newer release is available.
 - **Roles** — clips are tagged `dialogue.DJI` / `dialogue.Meta` in FCP so
   you can audition, mute, or mix each camera as a group.
 - **JSON report** (`--report`) with every offset, confidence, and warning —

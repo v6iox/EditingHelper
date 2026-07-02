@@ -54,6 +54,8 @@ def _clip(clip: TimelineClip, rate: float) -> dict:
         for m in clip.markers
     ]
     metadata: dict = {"editsync": {"role": clip.role}}
+    if clip.volume_db is not None:
+        metadata["editsync"]["volume_db"] = clip.volume_db
     if clip.sync_confidence is not None:
         metadata["editsync"]["sync_confidence"] = round(clip.sync_confidence, 4)
     if clip.transform_scale is not None:
@@ -78,7 +80,9 @@ def _clip(clip: TimelineClip, rate: float) -> dict:
     }
 
 
-def _track(name: str, clips: list[TimelineClip], rate: float) -> dict:
+def _track(
+    name: str, clips: list[TimelineClip], rate: float, kind: str = "Video"
+) -> dict:
     children: list[dict] = []
     cursor = Fraction(0)
     for clip in sorted(clips, key=lambda c: c.timeline_start):
@@ -89,7 +93,7 @@ def _track(name: str, clips: list[TimelineClip], rate: float) -> dict:
     return {
         "OTIO_SCHEMA": "Track.1",
         "name": name,
-        "kind": "Video",
+        "kind": kind,
         "children": children,
         "source_range": None,
         "effects": [],
@@ -105,6 +109,10 @@ def export(timeline: Timeline, path: Path) -> None:
         clips = [c for c in timeline.overlay_clips if c.lane == lane]
         if clips:
             tracks.append(_track(f"Overlay {lane} (Meta)", clips, rate))
+    if timeline.music_clips:
+        tracks.append(
+            _track("Background Music", timeline.music_clips, rate, kind="Audio")
+        )
 
     doc = {
         "OTIO_SCHEMA": "Timeline.1",
@@ -136,6 +144,14 @@ def export(timeline: Timeline, path: Path) -> None:
                         "amount": r.amount,
                     }
                     for r in timeline.blur_regions
+                ],
+                "music_duck_regions": [
+                    {
+                        "start": float(r.start),
+                        "end": float(r.end),
+                        "level_db": r.level_db,
+                    }
+                    for r in timeline.music_duck_regions
                 ],
             }
         },

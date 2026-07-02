@@ -48,6 +48,7 @@ class SyncJob:
     options: BuildOptions
     formats: list[str]
     output_dir: Path
+    music: MediaFile | None = None
     write_report: bool = True
 
 
@@ -81,6 +82,7 @@ class SyncWorker(QThread):
                 overlays,
                 self.job.options,
                 progress=self.progress.emit,
+                music=self.job.music,
             )
 
             from .. import exporters

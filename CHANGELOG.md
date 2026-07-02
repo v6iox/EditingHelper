@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.1.0 — 2026-07-02
+
+- **Background music** (off by default): drop a song in with your
+  footage and turn on "Loop my music file quietly under the whole
+  video" — it loops for the full duration on its own layer beneath the
+  video, at background level (volume slider, default −22 dB), so your
+  voice stays on top. Each pass is a separate clip you can trim or swap
+  in the editor. CLI: `--music FILE --music-volume DB`.
+- **Silence music during glasses clips** (off by default): keyframes
+  the music to silence with smooth fades wherever a vertical clip
+  plays. CLI: `--music-duck`.
+- **Auto-updater**: when a newer release exists, a prompt appears in
+  the bottom-left corner on launch; one click downloads it, swaps the
+  app in place, and relaunches. (Requires the app to be able to see the
+  releases — see the note in docs/APP_GUIDE.md.)
+
 ## 1.0.1 — 2026-07-02
 
 - macOS builds are now **code-signed with a Developer ID certificate,

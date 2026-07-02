@@ -32,8 +32,9 @@ class TimelineClip:
     timeline_start: Fraction  # seconds on the sequence timeline
     duration: Fraction  # seconds
     source_start: Fraction  # trim into the source media, seconds
-    lane: int  # 0 = primary storyline, 1+ = connected/overlay layers
-    role: str = ""  # e.g. "DJI" / "Meta" -> audio/video roles or track names
+    lane: int  # 0 = primary storyline, 1+ = overlay layers, <0 = audio beds
+    role: str = ""  # e.g. "DJI" / "Meta" / "Music" -> roles or track names
+    volume_db: float | None = None  # static clip volume (background music)
     markers: list[Marker] = field(default_factory=list)
     sync_confidence: float | None = None
     transform_scale: tuple[float, float] | None = None
@@ -72,6 +73,8 @@ class Timeline:
     clips: list[TimelineClip] = field(default_factory=list)
     duck_regions: list[DuckRegion] = field(default_factory=list)
     blur_regions: list[BlurRegion] = field(default_factory=list)
+    # intervals where background-music clips are muted (overlay playing)
+    music_duck_regions: list[DuckRegion] = field(default_factory=list)
 
     @property
     def frame_duration(self) -> Fraction:
@@ -98,6 +101,13 @@ class Timeline:
         )
 
     @property
+    def music_clips(self) -> list[TimelineClip]:
+        return sorted(
+            (c for c in self.clips if c.lane < 0),
+            key=lambda c: c.timeline_start,
+        )
+
+    @property
     def lane_count(self) -> int:
         return max((c.lane for c in self.clips), default=0)
 
@@ -109,7 +119,7 @@ def assign_lanes(clips: list[TimelineClip], lane_per_clip: bool = False) -> None
     `lane_per_clip`, every overlay gets its own lane, which some editors
     prefer for manual trimming.
     """
-    overlays = sorted((c for c in clips if c.lane != 0), key=lambda c: c.timeline_start)
+    overlays = sorted((c for c in clips if c.lane > 0), key=lambda c: c.timeline_start)
     if lane_per_clip:
         for i, clip in enumerate(overlays, start=1):
             clip.lane = i

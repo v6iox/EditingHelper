@@ -6,6 +6,16 @@ built for the **DJI Action (horizontal, always recording)** +
 **Final Cut Pro** first, with Premiere Pro and OpenTimelineIO exports for
 portability to other editors.
 
+Comes in two flavors:
+
+- **The EditSync app** — a downloadable black-and-white desktop app:
+  drag in footage, pick options in plain language, press one button.
+  ffmpeg is bundled; nothing to install, no terminal. See
+  [docs/APP_GUIDE.md](docs/APP_GUIDE.md) for downloading/using it and how
+  releases are built (GitHub Actions produces the macOS `.dmg` and
+  Windows `.zip`; `./packaging/build_macos.sh` builds locally).
+- **The `editsync` CLI** — the same engine, scriptable (documented below).
+
 ## What it does
 
 1. **Scans** your footage and auto-classifies each file as *primary*
@@ -113,12 +123,14 @@ src/editsync/
   builder.py      orchestration: match, place, layer, duck
   report.py       text/JSON sync reports
   cli.py          `editsync` command
+  gui/            the desktop app (PySide6, monochrome theme)
   exporters/
     fcpxml.py     Final Cut Pro (primary target)
     premiere.py   Adobe Premiere Pro (xmeml)
     otio.py       OpenTimelineIO (universal interchange)
-tests/            unit + ffmpeg-backed end-to-end tests
-docs/             FCP workflow guide, porting guide
+packaging/        PyInstaller spec + macOS/Windows build scripts
+tests/            unit, GUI (offscreen), and ffmpeg-backed e2e tests
+docs/             app guide, FCP workflow guide, porting guide
 ```
 
 ## Development

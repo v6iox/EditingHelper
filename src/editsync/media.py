@@ -10,8 +10,10 @@ from __future__ import annotations
 import datetime as _dt
 import fnmatch
 import json
+import os
 import shutil
 import subprocess
+import sys
 from dataclasses import dataclass, field
 from enum import Enum
 from fractions import Fraction
@@ -76,7 +78,29 @@ class MediaFile:
         return 1 / self.frame_rate if self.frame_rate else Fraction(1, 30)
 
 
+def _bundled_tool_dirs() -> list[Path]:
+    """Places a packaged app may carry its own ffmpeg/ffprobe binaries."""
+    dirs: list[Path] = []
+    env_dir = os.environ.get("EDITSYNC_FFMPEG_DIR")
+    if env_dir:
+        dirs.append(Path(env_dir))
+    if getattr(sys, "frozen", False):  # running from a PyInstaller bundle
+        exe_dir = Path(sys.executable).parent
+        dirs += [exe_dir, exe_dir / "bin"]
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            dirs += [Path(meipass), Path(meipass) / "bin"]
+        # macOS .app layout: Contents/MacOS/<exe>, binaries in Contents/Resources
+        dirs.append(exe_dir.parent / "Resources")
+    return dirs
+
+
 def require_tool(name: str) -> str:
+    exe_name = f"{name}.exe" if os.name == "nt" else name
+    for d in _bundled_tool_dirs():
+        candidate = d / exe_name
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return str(candidate)
     exe = shutil.which(name)
     if not exe:
         raise ProbeError(

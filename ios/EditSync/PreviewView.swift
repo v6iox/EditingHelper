@@ -67,6 +67,22 @@ struct PreviewView: View {
                 }
                 .disabled(model.exportProgress != nil)
             }
+
+            // hand the finished video to CapCut (or anywhere) once saved
+            if let url = model.exportedURL {
+                ShareLink(item: url) {
+                    Label("Send to CapCut or another app",
+                          systemImage: "square.and.arrow.up")
+                        .font(.subheadline)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(Theme.surface2)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                }
+                Text("CapCut shows up in the share sheet when it's installed.")
+                    .font(.caption2)
+                    .foregroundStyle(Theme.grayDim)
+            }
         }
         .padding(16)
         .foregroundStyle(Theme.white)

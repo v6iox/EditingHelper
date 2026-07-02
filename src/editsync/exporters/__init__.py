@@ -12,13 +12,18 @@ from pathlib import Path
 from typing import Callable
 
 from ..timeline import Timeline
-from . import fcpxml, otio, premiere
+from . import capcut, fcpxml, otio, premiere
 
 EXPORTERS: dict[str, tuple[Callable[[Timeline, Path], None], str, str]] = {
     # name: (export function, default extension, description)
     "fcpxml": (fcpxml.export, ".fcpxml", "Final Cut Pro (also imports into DaVinci Resolve)"),
     "premiere": (premiere.export, ".xml", "Adobe Premiere Pro (xmeml)"),
     "otio": (otio.export, ".otio", "OpenTimelineIO JSON (universal interchange)"),
+    "capcut": (
+        capcut.export,
+        ".capcut",
+        "CapCut desktop draft folder (experimental; no official format exists)",
+    ),
 }
 
 

@@ -164,6 +164,12 @@ def cmd_sync(args) -> int:
         )
         print(f"Wrote video: {mp4}")
 
+    if "capcut" in formats:
+        print(
+            "note: CapCut import is experimental (CapCut has no official "
+            "project format) - see INSTRUCTIONS.txt inside the .capcut folder.",
+            file=sys.stderr,
+        )
     if result.timeline.title_card is not None and "premiere" in formats:
         print(
             "note: the opening title card is included in the Final Cut Pro "
@@ -271,7 +277,7 @@ def main(argv: list[str] | None = None) -> int:
         "-f",
         "--format",
         default="fcpxml",
-        choices=["fcpxml", "premiere", "otio", "all"],
+        choices=["fcpxml", "premiere", "otio", "capcut", "all"],
         help="timeline format to export (default: fcpxml)",
     )
     p_sync.add_argument(

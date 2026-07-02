@@ -161,6 +161,7 @@ def test_all_formats_export(footage, tmp_path):
     assert (tmp_path / "multi.fcpxml").exists()
     assert (tmp_path / "multi.xml").exists()
     assert (tmp_path / "multi.otio").exists()
+    assert (tmp_path / "multi.capcut" / "draft_content.json").exists()
     # premiere output parses and has the overlay on V2
     root = ET.fromstring(
         (tmp_path / "multi.xml").read_text().split("<!DOCTYPE xmeml>")[1]

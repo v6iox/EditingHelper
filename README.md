@@ -3,8 +3,8 @@
 Automatic audio-sync of multi-camera footage into an editable timeline —
 built for the **DJI Action (horizontal, always recording)** +
 **Meta glasses (vertical, recorded only when needed)** workflow, targeting
-**Final Cut Pro** first, with Premiere Pro and OpenTimelineIO exports for
-portability to other editors.
+**Final Cut Pro** first, with Premiere Pro, OpenTimelineIO, and
+experimental CapCut exports for portability to other editors.
 
 **Download the app:** grab `EditSync.dmg` (Mac) or `EditSync-windows.zip`
 (Windows) from the [Releases page](../../releases/latest). No setup —

@@ -67,9 +67,12 @@ if an editor needs information the model lacks, extend the model neutrally.
 - **Anything OTIO-adjacent** (Avid via adapters, kdenlive, Hiero, RV) —
   use the `.otio` output. EditSync-specific data (confidence, duck regions,
   suggested transforms) rides along in `metadata.editsync`.
-- **CapCut / mobile editors** — no public project format; the practical
-  route is exporting cut lists from the `Timeline` (a CSV/EDL exporter
-  would be ~50 lines following the recipe above).
+- **CapCut** — shipped (`exporters/capcut.py`, experimental): CapCut
+  has no official interchange format, so the exporter writes its local
+  draft folder (`draft_content.json`, community-mapped schema, times in
+  microseconds). Expect occasional breakage across CapCut releases; the
+  finished-video render is the fallback. CapCut *mobile* has no import
+  mechanism at all — the iPhone app shares the finalized video into it.
 
 ## Porting the *analysis* somewhere else
 

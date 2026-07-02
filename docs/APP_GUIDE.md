@@ -34,6 +34,14 @@ locally on a Mac: `./packaging/build_macos.sh`.)*
 
 2. **Pick your options** — all in plain language:
    - **Project name** — what the project will be called in Final Cut.
+   - **Opening title** — type a title (the panel or procedure) and a
+     description under it (year/make/model) and the video starts on a
+     clean white card that fades out to reveal the footage. Pick one of
+     four looks from the live previews — they show your actual text.
+     Two sliders control how long it stays and how fast it fades.
+     Leave the title empty for no card. (The card exports to Final Cut
+     Pro; Premiere's interchange format can't carry titles, and the app
+     will remind you if that combination comes up.)
    - **Vertical clips look like** — **Blurred background** (the default:
      your wide shot stays behind the vertical clip, softly blurred, with
      a slider for how much blur), centered, fill the frame, or small in a
@@ -67,17 +75,16 @@ corner at launch: **Update now** downloads it, replaces the app, and
 reopens it. Dismiss with ✕ to keep working; it reappears next launch
 until you update.
 
-> **Note for private repositories:** the update check reads this
-> repository's Releases. While the repo is private, the app can only
-> see them if the `EDITSYNC_GITHUB_TOKEN` environment variable holds a
-> GitHub token with read access (or if the repo is made public — then
-> it works for everyone with no setup). Without access the app simply
-> never shows the prompt; nothing breaks.
+The repository is public, so the update check works for everyone with
+no setup. (If it is ever made private again, set `EDITSYNC_GITHUB_TOKEN`
+to a read-access token on each machine; without access the app simply
+never shows the prompt.)
 
 ## Good to know
 
-- **The app remembers your choices** — framing style, blur strength,
-  audio behavior, formats, and window size are restored next launch.
+- **The app remembers everything** — project name, title card text and
+  style, framing, blur, audio behavior, music settings, formats, and
+  window size are all restored on next launch.
 
 - **Green markers** on clips say how confident the match was. A **red
   marker** means "double-check this one by ear."

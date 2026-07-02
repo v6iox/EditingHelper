@@ -23,9 +23,15 @@ from typing import Callable, Optional
 from xml.etree import ElementTree as ET
 
 from ..media import MediaFile
-from ..timeline import BlurRegion, DuckRegion, Timeline, TimelineClip
+from ..pngutil import write_solid_png
+from ..timeline import BlurRegion, DuckRegion, Timeline, TimelineClip, TitleCard
+from ..titles import get_style
 
 FCPXML_VERSION = "1.11"
+BASIC_TITLE_UID = (
+    ".../Titles.localized/Bumper:Opener.localized/Basic Title.localized/"
+    "Basic Title.moti"
+)
 
 
 def fmt_time(t: Fraction) -> str:
@@ -85,6 +91,39 @@ class _Resources:
         if key not in self._formats:
             rid = self._new_id("r")
             ET.SubElement(self.el, "effect", id=rid, name=name, uid=uid)
+            self._formats[key] = rid
+        return self._formats[key]
+
+    def image_asset_id(self, path: Path, width: int, height: int) -> str:
+        """A still-image asset (duration 0s, format without frameDuration)."""
+        key = ("image", str(path))
+        if key not in self._formats:
+            fmt_key = ("imageformat", width, height)
+            if fmt_key not in self._formats:
+                fmt_id = self._new_id("r")
+                ET.SubElement(
+                    self.el,
+                    "format",
+                    id=fmt_id,
+                    width=str(width),
+                    height=str(height),
+                )
+                self._formats[fmt_key] = fmt_id
+            rid = self._new_id("r")
+            asset = ET.SubElement(
+                self.el,
+                "asset",
+                id=rid,
+                name=path.stem,
+                uid=_asset_uid(path),
+                start="0s",
+                duration="0s",
+                hasVideo="1",
+                format=self._formats[fmt_key],
+            )
+            ET.SubElement(
+                asset, "media-rep", kind="original-media", src=_file_url(path)
+            )
             self._formats[key] = rid
         return self._formats[key]
 
@@ -242,6 +281,104 @@ def _add_markers(el: ET.Element, clip: TimelineClip, frame_duration: Fraction) -
         ET.SubElement(el, "marker", **attrs)
 
 
+def _add_fade_out(el: ET.Element, card: TitleCard) -> None:
+    """Opacity keyframes: fully opaque through `hold`, then out over `fade`."""
+    blend = ET.SubElement(el, "adjust-blend")
+    param = ET.SubElement(blend, "param", name="amount")
+    ET.SubElement(param, "keyframe", time=fmt_time(card.hold), value="1")
+    ET.SubElement(
+        param, "keyframe", time=fmt_time(card.hold + card.fade), value="0"
+    )
+
+
+def _add_title_card(
+    parent_el: ET.Element,
+    parent_clip: TimelineClip,
+    timeline: Timeline,
+    resources: _Resources,
+    background: Path,
+) -> None:
+    """White full-frame card + title/description text, fading out on top
+    of the first storyline clip."""
+    card = timeline.title_card
+    lane = timeline.lane_count + 1
+    child_offset = parent_clip.source_start + (
+        Fraction(0) - parent_clip.timeline_start
+    )
+
+    bg = ET.SubElement(
+        parent_el,
+        "video",
+        lane=str(lane),
+        ref=resources.image_asset_id(background, timeline.width, timeline.height),
+        offset=fmt_time(child_offset),
+        name="Title Background",
+        start="0s",
+        duration=fmt_time(card.duration),
+    )
+    _add_fade_out(bg, card)
+
+    style = get_style(card.style)
+    title = ET.SubElement(
+        parent_el,
+        "title",
+        lane=str(lane + 1),
+        ref=resources.effect_id("Basic Title", BASIC_TITLE_UID),
+        offset=fmt_time(child_offset),
+        name=card.title,
+        start="0s",
+        duration=fmt_time(card.duration),
+    )
+    if style.position != (0.0, 0.0):
+        ET.SubElement(
+            title,
+            "adjust-transform",
+            position=(
+                f"{timeline.width * style.position[0]:.0f} "
+                f"{timeline.height * style.position[1]:.0f}"
+            ),
+        )
+    _add_fade_out(title, card)
+
+    title_text = card.title.upper() if style.title_upper else card.title
+    desc_text = (
+        card.description.upper() if style.desc_upper else card.description
+    )
+    text = ET.SubElement(title, "text")
+    run_title = ET.SubElement(text, "text-style", ref="ts_card_title")
+    if desc_text:
+        run_title.text = title_text + "\n"
+        run_desc = ET.SubElement(text, "text-style", ref="ts_card_desc")
+        run_desc.text = desc_text
+    else:
+        run_title.text = title_text
+
+    def style_def(sid: str, font: str, size: int, bold: bool, color: str) -> None:
+        # Motion title templates conform to the project resolution, so
+        # fontSize is resolution-independent: emit the 1080p-reference size
+        # unscaled (scaling it would double the text on a 4K timeline)
+        style_el = ET.SubElement(title, "text-style-def", id=sid)
+        attrs = {
+            "font": font,
+            "fontSize": str(size),
+            "fontColor": color,
+            "alignment": style.alignment,
+        }
+        if bold:
+            attrs["fontFace"] = "Bold"
+        ET.SubElement(style_el, "text-style", **attrs)
+
+    style_def(
+        "ts_card_title", style.title_font, style.title_size,
+        style.title_bold, "0 0 0 1",
+    )
+    if desc_text:
+        style_def(
+            "ts_card_desc", style.desc_font, style.desc_size,
+            False, style.desc_color,
+        )
+
+
 def _overlay_parent(
     overlay: TimelineClip, primaries: list[TimelineClip]
 ) -> TimelineClip:
@@ -256,7 +393,9 @@ def _overlay_parent(
     return parent
 
 
-def build_tree(timeline: Timeline) -> ET.ElementTree:
+def build_tree(
+    timeline: Timeline, title_background: Optional[Path] = None
+) -> ET.ElementTree:
     root = ET.Element("fcpxml", version=FCPXML_VERSION)
     resources = _Resources(root)
 
@@ -292,6 +431,7 @@ def build_tree(timeline: Timeline) -> ET.ElementTree:
         if timeline.blur_regions
         else None
     )
+    first_primary = primaries[0] if primaries else None
     cursor = Fraction(0)
     for p in primaries:
         if p.timeline_start > cursor:
@@ -368,6 +508,13 @@ def build_tree(timeline: Timeline) -> ET.ElementTree:
                     )
             _add_markers(o_el, o, timeline.frame_duration)
 
+        if (
+            p is first_primary
+            and timeline.title_card is not None
+            and title_background is not None
+        ):
+            _add_title_card(p_el, p, timeline, resources, title_background)
+
         _add_markers(p_el, p, timeline.frame_duration)
         if blur_effect:
             _add_blur_filter(
@@ -381,7 +528,15 @@ def build_tree(timeline: Timeline) -> ET.ElementTree:
 
 
 def export(timeline: Timeline, path: Path) -> None:
-    tree = build_tree(timeline)
+    background: Optional[Path] = None
+    if timeline.title_card is not None:
+        # the white card background lives next to the project file so the
+        # timeline references it like any other media; resolve first so the
+        # media-rep URL is absolute even when the export path is relative
+        resolved = Path(path).resolve()
+        background = resolved.with_name(f"{resolved.stem}_title_background.png")
+        write_solid_png(background, timeline.width, timeline.height)
+    tree = build_tree(timeline, title_background=background)
     ET.indent(tree, space="    ")
     xml_body = ET.tostring(tree.getroot(), encoding="unicode")
     path.write_text(

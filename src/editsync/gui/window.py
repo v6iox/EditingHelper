@@ -38,6 +38,7 @@ from PySide6.QtWidgets import (
 from .. import __version__
 from ..builder import BuildOptions
 from ..media import MediaFile, ProbeError, Role, require_tool
+from .title_picker import TitleStylePicker
 from .update import start_update_check
 from .widgets import AnimatedButton, DropZone, FileRow, Segmented, section_label
 from .worker import ProbeWorker, SyncJob, SyncOutcome, SyncWorker
@@ -182,6 +183,52 @@ class MainWindow(QWidget):
         name_row.addWidget(self.name_edit)
         name_row.addStretch(1)
         opt.addLayout(name_row)
+
+        opt.addWidget(section_label("Opening title — leave empty for none"))
+        title_fields = QHBoxLayout()
+        self.title_edit = QLineEdit()
+        self.title_edit.setPlaceholderText("Title — e.g. Front Bumper Removal")
+        self.title_desc_edit = QLineEdit()
+        self.title_desc_edit.setPlaceholderText("Description — e.g. 2024 Toyota GR86")
+        title_fields.addWidget(self.title_edit)
+        title_fields.addWidget(self.title_desc_edit)
+        opt.addLayout(title_fields)
+
+        self.title_style_picker = TitleStylePicker()
+        opt.addWidget(self.title_style_picker)
+        self.title_edit.textChanged.connect(self._refresh_title_previews)
+        self.title_desc_edit.textChanged.connect(self._refresh_title_previews)
+
+        title_timing = QHBoxLayout()
+        hold_label = QLabel("Stays on screen")
+        hold_label.setObjectName("Hint")
+        self.title_hold_slider = QSlider(Qt.Horizontal)
+        self.title_hold_slider.setRange(2, 16)  # half-second steps: 1-8 s
+        self.title_hold_slider.setValue(6)
+        self.title_hold_slider.setMaximumWidth(160)
+        self.title_hold_value = QLabel("3.0 s")
+        self.title_hold_value.setObjectName("Hint")
+        self.title_hold_slider.valueChanged.connect(
+            lambda v: self.title_hold_value.setText(f"{v / 2:.1f} s")
+        )
+        fade_label = QLabel("Fades out over")
+        fade_label.setObjectName("Hint")
+        self.title_fade_slider = QSlider(Qt.Horizontal)
+        self.title_fade_slider.setRange(1, 12)  # quarter-second steps: 0.25-3 s
+        self.title_fade_slider.setValue(4)
+        self.title_fade_slider.setMaximumWidth(160)
+        self.title_fade_value = QLabel("1.00 s")
+        self.title_fade_value.setObjectName("Hint")
+        self.title_fade_slider.valueChanged.connect(
+            lambda v: self.title_fade_value.setText(f"{v / 4:.2f} s")
+        )
+        for w in (
+            hold_label, self.title_hold_slider, self.title_hold_value,
+            fade_label, self.title_fade_slider, self.title_fade_value,
+        ):
+            title_timing.addWidget(w)
+        title_timing.addStretch(1)
+        opt.addLayout(title_timing)
 
         opt.addWidget(section_label("Vertical clips look like"))
         self.style_seg = Segmented(
@@ -414,6 +461,11 @@ class MainWindow(QWidget):
         self.blur_slider.setEnabled(is_blur)
         self.blur_value.setEnabled(is_blur)
 
+    def _refresh_title_previews(self) -> None:
+        self.title_style_picker.update_sample(
+            self.title_edit.text(), self.title_desc_edit.text()
+        )
+
     def _music_file(self) -> MediaFile | None:
         return next((m for m in self.media if m.role == Role.MUSIC), None)
 
@@ -541,6 +593,11 @@ class MainWindow(QWidget):
             lane_per_clip=self.lane_per_clip.isChecked(),
             music_db=float(self.music_vol_slider.value()),
             music_duck=self.music_duck.isChecked(),
+            title_text=self.title_edit.text(),
+            title_description=self.title_desc_edit.text(),
+            title_style=self.title_style_picker.value(),
+            title_hold=self.title_hold_slider.value() / 2,
+            title_fade=self.title_fade_slider.value() / 4,
         )
         job = SyncJob(
             media=list(self.media),
@@ -620,6 +677,7 @@ class MainWindow(QWidget):
 
     def _load_settings(self) -> None:
         s = self._settings()
+        self.name_edit.setText(s.value("project_name", self.name_edit.text()))
         self.style_seg.set_value(s.value("overlay_style", self.style_seg.value()))
         self.duck_seg.set_value(s.value("duck", self.duck_seg.value()))
         self.blur_slider.setValue(s.value("blur_amount", self.blur_slider.value(), type=int))
@@ -627,14 +685,23 @@ class MainWindow(QWidget):
         self.fmt_premiere.setChecked(s.value("fmt_premiere", False, type=bool))
         self.fmt_otio.setChecked(s.value("fmt_otio", False, type=bool))
         self.lane_per_clip.setChecked(s.value("lane_per_clip", False, type=bool))
+        self.music_enable.setChecked(s.value("music_enable", False, type=bool))
         self.music_vol_slider.setValue(s.value("music_db", -22, type=int))
         self.music_duck.setChecked(s.value("music_duck", False, type=bool))
+        self.title_edit.setText(s.value("title_text", ""))
+        self.title_desc_edit.setText(s.value("title_description", ""))
+        self.title_style_picker.set_value(
+            s.value("title_style", self.title_style_picker.value())
+        )
+        self.title_hold_slider.setValue(s.value("title_hold_halves", 6, type=int))
+        self.title_fade_slider.setValue(s.value("title_fade_quarters", 4, type=int))
         geometry = s.value("geometry")
         if geometry is not None:
             self.restoreGeometry(geometry)
 
     def _save_settings(self) -> None:
         s = self._settings()
+        s.setValue("project_name", self.name_edit.text())
         s.setValue("overlay_style", self.style_seg.value())
         s.setValue("duck", self.duck_seg.value())
         s.setValue("blur_amount", self.blur_slider.value())
@@ -642,8 +709,14 @@ class MainWindow(QWidget):
         s.setValue("fmt_premiere", self.fmt_premiere.isChecked())
         s.setValue("fmt_otio", self.fmt_otio.isChecked())
         s.setValue("lane_per_clip", self.lane_per_clip.isChecked())
+        s.setValue("music_enable", self.music_enable.isChecked())
         s.setValue("music_db", self.music_vol_slider.value())
         s.setValue("music_duck", self.music_duck.isChecked())
+        s.setValue("title_text", self.title_edit.text())
+        s.setValue("title_description", self.title_desc_edit.text())
+        s.setValue("title_style", self.title_style_picker.value())
+        s.setValue("title_hold_halves", self.title_hold_slider.value())
+        s.setValue("title_fade_quarters", self.title_fade_slider.value())
         s.setValue("geometry", self.saveGeometry())
 
     def closeEvent(self, event) -> None:

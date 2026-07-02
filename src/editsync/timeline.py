@@ -65,11 +65,32 @@ class BlurRegion:
 
 
 @dataclass
+class TitleCard:
+    """Opening title over a white full-frame background that fades out.
+
+    Shown from the very start of the timeline: fully opaque for `hold`
+    seconds, then fading to transparent over `fade` seconds, revealing
+    the video already playing underneath.
+    """
+
+    title: str  # e.g. the panel or procedure name
+    description: str = ""  # e.g. year / make / model
+    hold: Fraction = Fraction(3)  # seconds fully visible
+    fade: Fraction = Fraction(1)  # fade-out length (the "speed")
+    style: str = "classic"  # key into editsync.titles.STYLES
+
+    @property
+    def duration(self) -> Fraction:
+        return self.hold + self.fade
+
+
+@dataclass
 class Timeline:
     name: str
     frame_rate: Fraction
     width: int
     height: int
+    title_card: "TitleCard | None" = None
     clips: list[TimelineClip] = field(default_factory=list)
     duck_regions: list[DuckRegion] = field(default_factory=list)
     blur_regions: list[BlurRegion] = field(default_factory=list)

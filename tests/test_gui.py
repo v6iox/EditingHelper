@@ -186,6 +186,86 @@ class TestMusicControls:
         assert not row.grab().isNull()
 
 
+class TestTitleControls:
+    def test_defaults_empty_and_classic(self, qapp):
+        win = MainWindow()
+        assert win.title_edit.text() == ""
+        assert win.title_desc_edit.text() == ""
+        assert win.title_style_picker.value() == "classic"
+        assert win.title_hold_slider.value() == 6  # 3.0 s
+        assert win.title_fade_slider.value() == 4  # 1.00 s
+
+    def test_previews_render_for_all_styles(self, qapp):
+        from editsync.gui.title_picker import TitleStylePicker
+        from editsync.titles import STYLES
+
+        picker = TitleStylePicker()
+        picker.update_sample("Front Bumper", "2024 GR86")
+        for key in STYLES:
+            card = picker._cards[key]
+            assert not card.preview.pixmap().isNull()
+
+    def test_style_click_changes_value(self, qapp):
+        from editsync.gui.title_picker import TitleStylePicker
+
+        picker = TitleStylePicker()
+        changes = []
+        picker.changed.connect(changes.append)
+        picker._on_click("statement")
+        assert picker.value() == "statement"
+        assert changes == ["statement"]
+        assert picker._cards["statement"].selected
+        assert not picker._cards["classic"].selected
+
+    def test_release_outside_card_cancels_click(self, qapp):
+        # regression: press then drag off the card and release = no select
+        from PySide6.QtCore import QEvent, QPointF, Qt as QtNS
+        from PySide6.QtGui import QMouseEvent
+        from editsync.gui.title_picker import TitleStylePicker
+
+        picker = TitleStylePicker()
+        card = picker._cards["statement"]
+        card.resize(card.sizeHint())
+        outside = QMouseEvent(
+            QEvent.MouseButtonRelease,
+            QPointF(-500, -500),
+            QtNS.LeftButton,
+            QtNS.NoButton,
+            QtNS.NoModifier,
+        )
+        card.mouseReleaseEvent(outside)
+        assert picker.value() == "classic"
+        inside = QMouseEvent(
+            QEvent.MouseButtonRelease,
+            QPointF(5, 5),
+            QtNS.LeftButton,
+            QtNS.NoButton,
+            QtNS.NoModifier,
+        )
+        card.mouseReleaseEvent(inside)
+        assert picker.value() == "statement"
+
+    def test_all_settings_persist(self, qapp):
+        win = MainWindow()
+        win.name_edit.setText("Bumper Series")
+        win.title_edit.setText("Front Bumper Removal")
+        win.title_desc_edit.setText("2024 Toyota GR86")
+        win.title_style_picker.set_value("lower-left")
+        win.title_hold_slider.setValue(10)
+        win.title_fade_slider.setValue(8)
+        win.music_enable.setChecked(True)
+        win._save_settings()
+
+        fresh = MainWindow()
+        assert fresh.name_edit.text() == "Bumper Series"
+        assert fresh.title_edit.text() == "Front Bumper Removal"
+        assert fresh.title_desc_edit.text() == "2024 Toyota GR86"
+        assert fresh.title_style_picker.value() == "lower-left"
+        assert fresh.title_hold_slider.value() == 10
+        assert fresh.title_fade_slider.value() == 8
+        assert fresh.music_enable.isChecked()
+
+
 class TestUpdatePill:
     def test_pill_appears_bottom_left_and_dismisses(self, qapp):
         from editsync.gui.update import MARGIN, UpdatePill

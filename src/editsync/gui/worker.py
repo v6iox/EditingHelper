@@ -96,6 +96,14 @@ class SyncWorker(QThread):
                 out = base.with_suffix(exporters.default_extension(fmt))
                 exporters.export(fmt, result.timeline, out)
                 written.append(out)
+            if (
+                result.timeline.title_card is not None
+                and "premiere" in self.job.formats
+            ):
+                result.warnings.append(
+                    "The opening title card only exports to Final Cut Pro — "
+                    "Premiere's format can't carry it, so add it there by hand."
+                )
             if self.job.write_report:
                 report_path = base.with_suffix(".sync-report.json")
                 write_json_report(result, report_path)

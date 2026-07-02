@@ -66,3 +66,7 @@ Ranked by permanence:
   highest quality.
 - The title card in the live preview is drawn as an overlay (identical
   layout); the saved video has it burned in by Core Animation.
+- After saving, **"Send to CapCut or another app"** opens the share
+  sheet with the finished video — CapCut mobile appears there when
+  installed (it has no project-import mechanism, so the finalized video
+  is the hand-off).

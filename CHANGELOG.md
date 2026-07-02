@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.4.0 — 2026-07-02
+
+- **CapCut support on all platforms.** Desktop (Mac/Windows): a new
+  "CapCut" save option writes a CapCut desktop *draft* folder — primary
+  storyline, overlays at their synced positions on their own tracks,
+  volume-keyframed ducking, looping music, and the title card with its
+  fade. CapCut has no official import format, so this targets its local
+  draft schema and is labeled experimental; INSTRUCTIONS.txt in the
+  folder covers installing it, and the finished-video render is the
+  always-works fallback. CLI: `-f capcut`. iPhone: a **"Send to CapCut
+  or another app"** share button on the preview screen hands the
+  finished video straight to CapCut mobile (which has no project-import
+  mechanism, so the finalized video is the correct hand-off).
+
 ## 1.3.0 — 2026-07-02
 
 - **Finished video (MP4)**: a new "Save for" option renders the whole

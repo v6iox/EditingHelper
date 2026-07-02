@@ -21,6 +21,7 @@ final class AppModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var exportProgress: Double?
     @Published var savedToCameraRoll = false
+    @Published var exportedURL: URL?  // finished video, for the share sheet
 
     var hasPrimary: Bool { clips.contains { $0.role == .primary } }
     var hasOverlay: Bool { clips.contains { $0.role == .overlay } }
@@ -116,6 +117,7 @@ final class AppModel: ObservableObject {
         plan = nil
         built = nil
         exportProgress = nil
+        exportedURL = nil
     }
 
     // MARK: export → camera roll
@@ -152,6 +154,7 @@ final class AppModel: ObservableObject {
                 if session.status != .completed {
                     throw session.error ?? ExportError.sessionFailed
                 }
+                exportedURL = outURL
 
                 try await PHPhotoLibrary.shared().performChanges {
                     PHAssetChangeRequest.creationRequestForAssetFromVideo(

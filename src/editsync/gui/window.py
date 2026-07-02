@@ -319,6 +319,11 @@ class MainWindow(QWidget):
         self.fmt_fcp.setChecked(True)
         self.fmt_premiere = QCheckBox("Premiere Pro")
         self.fmt_otio = QCheckBox("DaVinci Resolve / OTIO")
+        self.fmt_capcut = QCheckBox("CapCut")
+        self.fmt_capcut.setToolTip(
+            "Writes a CapCut desktop draft folder (experimental - CapCut has "
+            "no official import format). Instructions are included."
+        )
         self.fmt_video = QCheckBox("Finished video (MP4)")
         self.fmt_video.setToolTip(
             "Renders the whole synced edit to one video file - no editing "
@@ -327,6 +332,7 @@ class MainWindow(QWidget):
         fmt_row.addWidget(self.fmt_fcp)
         fmt_row.addWidget(self.fmt_premiere)
         fmt_row.addWidget(self.fmt_otio)
+        fmt_row.addWidget(self.fmt_capcut)
         fmt_row.addWidget(self.fmt_video)
         fmt_row.addStretch(1)
         opt.addLayout(fmt_row)
@@ -588,6 +594,8 @@ class MainWindow(QWidget):
             formats.append("premiere")
         if self.fmt_otio.isChecked():
             formats.append("otio")
+        if self.fmt_capcut.isChecked():
+            formats.append("capcut")
         if self.fmt_video.isChecked():
             formats.append("video")
         return formats
@@ -684,6 +692,13 @@ class MainWindow(QWidget):
                 "Your finished video is ready - press 'Watch the video', or "
                 "share the .mp4 anywhere. No editing software needed."
             )
+        if any(p.suffix == ".capcut" for p in outcome.written):
+            lines.append("")
+            lines.append(
+                "CapCut: copy the .capcut folder into CapCut's drafts "
+                "directory (INSTRUCTIONS.txt inside has the exact path), "
+                "then reopen CapCut."
+            )
         if any(p.suffix == ".fcpxml" for p in outcome.written):
             lines.append("")
             lines.append(
@@ -722,6 +737,7 @@ class MainWindow(QWidget):
         self.fmt_fcp.setChecked(s.value("fmt_fcp", True, type=bool))
         self.fmt_premiere.setChecked(s.value("fmt_premiere", False, type=bool))
         self.fmt_otio.setChecked(s.value("fmt_otio", False, type=bool))
+        self.fmt_capcut.setChecked(s.value("fmt_capcut", False, type=bool))
         self.fmt_video.setChecked(s.value("fmt_video", False, type=bool))
         self.lane_per_clip.setChecked(s.value("lane_per_clip", False, type=bool))
         self.music_enable.setChecked(s.value("music_enable", False, type=bool))
@@ -747,6 +763,7 @@ class MainWindow(QWidget):
         s.setValue("fmt_fcp", self.fmt_fcp.isChecked())
         s.setValue("fmt_premiere", self.fmt_premiere.isChecked())
         s.setValue("fmt_otio", self.fmt_otio.isChecked())
+        s.setValue("fmt_capcut", self.fmt_capcut.isChecked())
         s.setValue("fmt_video", self.fmt_video.isChecked())
         s.setValue("lane_per_clip", self.lane_per_clip.isChecked())
         s.setValue("music_enable", self.music_enable.isChecked())

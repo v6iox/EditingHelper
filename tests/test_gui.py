@@ -96,8 +96,10 @@ class TestMainWindow:
         assert win._formats() == ["fcpxml"]
         win.fmt_premiere.setChecked(True)
         win.fmt_otio.setChecked(True)
+        win.fmt_capcut.setChecked(True)
         win.fmt_video.setChecked(True)
-        assert win._formats() == ["fcpxml", "premiere", "otio", "video"]
+        assert win._formats() == ["fcpxml", "premiere", "otio", "capcut", "video"]
+        assert not MainWindow().fmt_capcut.isChecked()  # off by default
 
     def test_video_option_defaults_off_and_persists(self, qapp):
         win = MainWindow()

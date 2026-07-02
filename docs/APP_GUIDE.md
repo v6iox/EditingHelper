@@ -56,6 +56,10 @@ locally on a Mac: `./packaging/build_macos.sh`.)*
      second switch, also off by default, **silences the music while a
      glasses clip plays** and fades it back in after.
    - **Save for** — Final Cut Pro, Premiere Pro, DaVinci Resolve,
+     **CapCut** (experimental: writes a CapCut draft folder — copy it
+     into CapCut's projects directory per the included instructions;
+     CapCut has no official import format, so if a CapCut update breaks
+     it, use the Finished video instead),
      and/or **Finished video (MP4)** — that last one renders the whole
      edit into a single video file you can watch and share immediately,
      no editing software involved. A "Watch the video" button appears

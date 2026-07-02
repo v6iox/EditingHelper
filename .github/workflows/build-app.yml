@@ -103,6 +103,25 @@ jobs:
           name: EditSync-Windows
           path: dist/EditSync-windows.zip
 
+  ios:
+    # compile-check the iOS app (no signing) so Swift breakage blocks PRs
+    needs: test
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          cd ios && xcodegen
+      - name: Build for iOS Simulator
+        run: |
+          cd ios
+          xcodebuild build \
+            -project EditSync.xcodeproj \
+            -scheme EditSync \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO | tail -50
+
   release:
     # runs for pushed v* tags, or for manual dispatches that set release_tag
     # (the release action then creates that tag on the built commit)

@@ -55,7 +55,11 @@ locally on a Mac: `./packaging/build_macos.sh`.)*
      level (there's a volume slider), so your voice stays clear. A
      second switch, also off by default, **silences the music while a
      glasses clip plays** and fades it back in after.
-   - **Save for** — Final Cut Pro, Premiere Pro, and/or DaVinci Resolve.
+   - **Save for** — Final Cut Pro, Premiere Pro, DaVinci Resolve,
+     and/or **Finished video (MP4)** — that last one renders the whole
+     edit into a single video file you can watch and share immediately,
+     no editing software involved. A "Watch the video" button appears
+     on the results screen.
 
 3. **Press "Sync my footage"**, choose where to save, and wait — the app
    listens to all the audio and finds where every clip belongs.

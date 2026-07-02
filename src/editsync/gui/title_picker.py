@@ -20,21 +20,24 @@ PREVIEW_W, PREVIEW_H = 148, 84  # 16:9-ish miniature of the card
 REF_H = 1080  # style sizes are defined at this height
 
 
-def render_preview(
-    style: TitleStyle, title: str, description: str, scale: float = 2.0
-) -> QPixmap:
-    """Paint a miniature of the title card in the given style.
+def paint_card(
+    painter: QPainter,
+    style: TitleStyle,
+    title: str,
+    description: str,
+    w: int,
+    h: int,
+) -> None:
+    """Paint the title card (white background + laid-out text) at any size.
 
-    Rendered at 2x and marked high-DPI so it stays crisp on retina.
+    Shared by the miniature previews and the full-resolution card the
+    finished-video renderer composites, so they always match.
     """
-    w, h = round(PREVIEW_W * scale), round(PREVIEW_H * scale)
-    pixmap = QPixmap(w, h)
-    pixmap.fill(Qt.white)
-    painter = QPainter(pixmap)
+    painter.fillRect(0, 0, w, h, QColor("#ffffff"))
     painter.setRenderHint(QPainter.Antialiasing)
     painter.setRenderHint(QPainter.TextAntialiasing)
 
-    factor = h / REF_H  # map 1080p-reference sizes onto the miniature
+    factor = h / REF_H  # map 1080p-reference sizes onto this canvas
     title_text = title.upper() if style.title_upper else title
     desc_text = description.upper() if style.desc_upper else description
 
@@ -52,9 +55,9 @@ def render_preview(
     cy = h / 2 - style.position[1] * h
     top = cy - block_h / 2
 
-    def draw(text: str, font: QFont, color: str, y: float, metrics) -> None:
+    def draw(text: str, font: QFont, color: QColor, y: float, metrics) -> None:
         painter.setFont(font)
-        painter.setPen(QColor(color))
+        painter.setPen(color)
         if style.alignment == "left":
             x = cx - w * 0.18
         else:
@@ -62,12 +65,23 @@ def render_preview(
         painter.drawText(QRectF(x, y, w, metrics.height() * 1.4),
                          Qt.AlignLeft | Qt.AlignTop, text)
 
-    draw(title_text, title_font, "#0b0b0c", top, tm)
+    draw(title_text, title_font, QColor("#0b0b0c"), top, tm)
     if desc_text:
         rgb = [round(float(v) * 255) for v in style.desc_color.split()[:3]]
-        draw(
-            desc_text, desc_font, QColor(*rgb).name(), top + tm.height() + gap, dm
-        )
+        draw(desc_text, desc_font, QColor(*rgb), top + tm.height() + gap, dm)
+
+
+def render_preview(
+    style: TitleStyle, title: str, description: str, scale: float = 2.0
+) -> QPixmap:
+    """Paint a miniature of the title card in the given style.
+
+    Rendered at 2x and marked high-DPI so it stays crisp on retina.
+    """
+    w, h = round(PREVIEW_W * scale), round(PREVIEW_H * scale)
+    pixmap = QPixmap(w, h)
+    painter = QPainter(pixmap)
+    paint_card(painter, style, title, description, w, h)
     painter.end()
     pixmap.setDevicePixelRatio(scale)
     return pixmap

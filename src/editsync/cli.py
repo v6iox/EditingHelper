@@ -132,6 +132,38 @@ def cmd_sync(args) -> int:
         out = out_base if out_base.suffix and len(formats) == 1 else out_base.with_suffix(ext)
         exporters.export(fmt, result.timeline, out)
         print(f"Wrote {fmt}: {out}")
+    if args.render:
+        from .renderer import render as render_video
+        from .titlecard import render_card_png
+
+        card_png = None
+        if result.timeline.title_card is not None:
+            card_png = out_base.resolve().with_suffix(".title_card.png")
+            render_card_png(
+                result.timeline.title_card,
+                result.timeline.width,
+                result.timeline.height,
+                card_png,
+            )
+        mp4 = out_base.with_suffix(".mp4")
+        print(f"Rendering finished video to {mp4} ...")
+        last = {"pct": -1}
+
+        def _show(pct: int) -> None:
+            if pct >= last["pct"] + 10 or pct == 100:
+                last["pct"] = pct
+                print(f"  {pct}%")
+
+        render_video(
+            result.timeline,
+            mp4,
+            overlay_style=args.overlay_style,
+            blur_amount=args.blur_amount,
+            card_png=card_png,
+            progress=_show,
+        )
+        print(f"Wrote video: {mp4}")
+
     if result.timeline.title_card is not None and "premiere" in formats:
         print(
             "note: the opening title card is included in the Final Cut Pro "
@@ -145,6 +177,30 @@ def cmd_sync(args) -> int:
             f"\n{len(unplaced)} clip(s) were not placed - see the report above.",
             file=sys.stderr,
         )
+    return 0
+
+
+def cmd_demo(args) -> int:
+    from .testmode import generate_demo_shoot
+
+    dest = Path(args.output)
+    shoot = generate_demo_shoot(
+        dest,
+        split_recording=not args.no_split,
+        include_music=not args.no_music,
+        progress=lambda msg: print(msg),
+    )
+    print()
+    for f in shoot.files:
+        print(f"  {f}")
+    print()
+    print("Try it:")
+    music = f" --music {shoot.music}" if shoot.music else ""
+    print(
+        f"  editsync sync {dest} -o demo --render "
+        f'--title "Front Bumper Removal" '
+        f'--title-description "2024 Toyota GR86"{music}'
+    )
     return 0
 
 
@@ -205,6 +261,12 @@ def main(argv: list[str] | None = None) -> int:
     p_sync = sub.add_parser("sync", help="sync footage and export a timeline")
     _add_common_input_args(p_sync)
     p_sync.add_argument("-o", "--output", help="output file path (extension optional)")
+    p_sync.add_argument(
+        "--render",
+        action="store_true",
+        help="also render the finished video to an .mp4 next to the output "
+        "(no editing software needed)",
+    )
     p_sync.add_argument(
         "-f",
         "--format",
@@ -322,6 +384,22 @@ def main(argv: list[str] | None = None) -> int:
         "-j", "--jobs", type=int, default=4, help="parallel audio extraction jobs"
     )
     p_sync.set_defaults(func=cmd_sync)
+
+    p_demo = sub.add_parser(
+        "demo", help="generate a demo shoot with overlapping audio for testing"
+    )
+    p_demo.add_argument(
+        "-o", "--output", default="editsync-demo",
+        help="directory for the generated footage (default: ./editsync-demo)",
+    )
+    p_demo.add_argument(
+        "--no-split", action="store_true",
+        help="keep the main recording as one file instead of two",
+    )
+    p_demo.add_argument(
+        "--no-music", action="store_true", help="skip the demo music file"
+    )
+    p_demo.set_defaults(func=cmd_demo)
 
     p_probe = sub.add_parser("probe", help="show how files would be classified")
     _add_common_input_args(p_probe)

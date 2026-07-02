@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.3.0 — 2026-07-02
+
+- **Finished video (MP4)**: a new "Save for" option renders the whole
+  synced edit to one final video — overlays framed and blurred, title
+  card fading, audio ducked, music looped — no editing software needed.
+  A "Watch the video" button opens it straight from the results screen.
+  CLI: `--render`.
+- **Hidden test mode**: triple-click the logo (no visual hint) to open
+  a secret menu that generates a complete demo shoot — main camera
+  (optionally split into two files), glasses clips with genuinely
+  overlapping audio, and a song — and loads it, so every feature can be
+  demonstrated without real footage. CLI: `editsync demo`.
+- **EditSync for iPhone** (`ios/`): a native SwiftUI app with the same
+  sync engine (ported to Apple's Accelerate framework), same options,
+  and a mobile-first ending — the finished edit plays instantly in a
+  live viewer, then saves to the camera roll with one tap. Built and
+  compile-checked by CI on every change; see docs/IOS_GUIDE.md for
+  TestFlight / unlisted App Store distribution.
+
 ## 1.2.0 — 2026-07-02
 
 - **Opening title card** for training videos: a title (panel/procedure)

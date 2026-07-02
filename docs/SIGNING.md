@@ -6,7 +6,23 @@ with your Developer ID, notarized by Apple, and stapled — users just
 double-click the app, no security warnings. Without the secrets, builds
 stay unsigned (nothing breaks).
 
-You need a Mac for steps 1–2 (Keychain Access creates the private key).
+## The fast way (recommended)
+
+On your Mac, from the repository root:
+
+```sh
+./packaging/setup_signing.sh
+```
+
+The script creates the key and certificate request, opens the right
+Apple pages, converts the downloaded certificate, extracts your Team ID,
+and uploads all five secrets (automatically with the `gh` CLI, or by
+staging each value into your clipboard). You only upload one file on
+Apple's site, click Download, and create one app-specific password.
+
+The manual equivalent is documented below.
+
+You need a Mac for steps 1–2 (they create the private key).
 
 ## 1. Create the Developer ID certificate (~3 min)
 

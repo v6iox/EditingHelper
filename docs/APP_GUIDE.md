@@ -89,7 +89,13 @@ editing degree:
    studio**.
 2. Your shoot appears on a multi-track timeline: main camera at the
    bottom, glasses clips layered above at their synced spots, music
-   underneath, waveforms on everything.
+   underneath, waveforms on everything — with a **live viewer** above
+   showing the composed picture at the playhead. Press **▶** for a
+   silent live preview, drag the **scrubber puck** (or drag in the
+   timeline ruler) to move through the video, and **grab a glasses
+   clip right inside the picture to move where it sits in the frame**
+   — the render and every export place it exactly where you dropped
+   it.
 3. Let the automations do the boring work — every one of them is a
    single click and fully undoable:
    - **Tighten dead air** cuts the quiet stretches out of the whole

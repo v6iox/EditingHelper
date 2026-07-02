@@ -119,7 +119,18 @@ def _overlay_scale(style: str, w: int, h: int) -> str:
     return f"scale={w}:{h}:force_original_aspect_ratio=decrease{_MATRIX}"
 
 
-def _overlay_position(style: str, w: int) -> tuple[str, str]:
+def _overlay_position(
+    style: str, w: int, clip: Optional[TimelineClip] = None
+) -> tuple[str, str]:
+    """Overlay x/y expressions; a clip dragged in the live viewer carries
+    its own offset from center (project px, +y up — FCP's convention)."""
+    if (
+        clip is not None
+        and clip.transform_position is not None
+        and style != "fill"
+    ):
+        px, py = clip.transform_position
+        return (f"(W-w)/2+({px:.1f})", f"(H-h)/2-({py:.1f})")
     if style == "pip-left":
         return (f"{round(w * 0.04)}", "(H-h)/2")
     if style == "pip-right":
@@ -244,7 +255,7 @@ def build_command(
             f"{_overlay_scale(overlay_style, w, h)},fps={fps},setsar=1,"
             f"setpts=PTS+{tl:.4f}/TB[ov{k}]"
         )
-        x, y = _overlay_position(overlay_style, w)
+        x, y = _overlay_position(overlay_style, w, clip)
         filters.append(
             f"{vlabel}[ov{k}]overlay={x}:{y}:eof_action=pass"
             f":enable='between(t,{tl:.4f},{tl + dur:.4f})'[ovout{k}]"

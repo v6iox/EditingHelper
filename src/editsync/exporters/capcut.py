@@ -145,7 +145,8 @@ def _overlay_clip_from(clip: TimelineClip, timeline: Timeline) -> dict:
     tx = ty = 0.0
     if clip.transform_position:
         tx = clip.transform_position[0] / (timeline.width / 2)
-        ty = clip.transform_position[1] / (timeline.height / 2)
+        # the model's +y is up (FCP convention); CapCut's canvas y is down
+        ty = -clip.transform_position[1] / (timeline.height / 2)
     return _clip_block(scale=round(scale, 4), tx=round(tx, 4), ty=round(ty, 4))
 
 

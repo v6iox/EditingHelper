@@ -51,6 +51,7 @@ from ..media import MediaFile, Role
 from ..timeline import Timeline
 from . import style
 from .editor import RangeDialog, TimelineView
+from .viewer import LiveViewerPanel
 from .widgets import AnimatedButton, DropZone, FileRow, Segmented, section_label
 from .worker import ExportWorker, ProbeWorker, StudioAnalysis, StudioWorker, SyncJob
 
@@ -262,6 +263,8 @@ class RecreationalPage(QWidget):
         middle.setSpacing(12)
 
         view_wrap = QVBoxLayout()
+        self.viewer_panel = LiveViewerPanel()
+        view_wrap.addWidget(self.viewer_panel, stretch=2)
         self.view = TimelineView()
         self.view.about_to_edit.connect(self._on_about_to_edit)
         self.view.edited.connect(self._on_edited)
@@ -271,6 +274,16 @@ class RecreationalPage(QWidget):
         self.edit_status.setObjectName("Hint")
         view_wrap.addWidget(self.edit_status)
         middle.addLayout(view_wrap, stretch=1)
+
+        # playhead & picture stay in lockstep, both directions
+        self.view.playhead_moved.connect(
+            lambda t: self.viewer_panel.seek(t, emit=False)
+        )
+        self.viewer_panel.time_changed.connect(
+            lambda t: self.view.set_playhead(t, emit=False)
+        )
+        # dragging a clip inside the picture is an undoable edit
+        self.viewer_panel.clip_repositioned.connect(self._on_viewer_reposition)
 
         panel = QFrame()
         panel.setObjectName("Card")
@@ -500,8 +513,15 @@ class RecreationalPage(QWidget):
         note = f"{len(skipped)} clip(s) couldn't be matched — left out. " if skipped else ""
         self.edit_status.setText(
             note + "Double-click a clip to pick the part you want. "
-            "Drag edges to trim, Delete to remove."
+            "Drag edges to trim, Delete to remove — and drag a glasses "
+            "clip inside the picture to move what's visible."
         )
+        self.viewer_panel.set_timeline(
+            analysis.result.timeline,
+            self.style_seg.value(),
+            50.0,
+        )
+        self.viewer_panel.seek(0.0, emit=False)
         self._refresh_after_edit()
         self.screens.setCurrentWidget(self.editor_screen)
         self.view_fit()
@@ -536,6 +556,12 @@ class RecreationalPage(QWidget):
         has = clip is not None
         self.pick_btn.setEnabled(has)
         self.remove_btn.setEnabled(has)
+
+    def _on_viewer_reposition(self, clip, description: str) -> None:
+        if description == "__begin__":
+            self.view.begin_external_edit()
+        else:
+            self.view.end_external_edit(description)
 
     def _timeline_beats(self) -> list[float]:
         """The music's beat grid tiled across the timeline (music loops)."""
@@ -609,6 +635,9 @@ class RecreationalPage(QWidget):
         self.undo_btn.setEnabled(bool(self._undo))
         self.undo_btn.setText(f"Undo ({len(self._undo)})" if self._undo else "Undo")
         self.beat_btn.setEnabled(bool(self._timeline_beats()))
+        # the picture follows every structural change (and undo/reset
+        # swaps the timeline object entirely)
+        self.viewer_panel.set_timeline(timeline, self.style_seg.value(), 50.0)
 
     # --------------------------------------------------------- automations
     def tighten_dead_air(self) -> None:

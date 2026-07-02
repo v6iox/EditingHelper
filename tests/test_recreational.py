@@ -50,6 +50,16 @@ def no_network_update_check(monkeypatch):
     )
 
 
+@pytest.fixture(autouse=True)
+def stop_frame_fetchers():
+    """No frame-fetcher thread may outlive its test (Qt aborts at exit)."""
+    yield
+    from editsync.gui.viewer import FrameFetcher
+
+    FrameFetcher.stop_all()
+
+
+
 @pytest.fixture
 def timeline(make_media) -> Timeline:
     """30 s primary + one overlay at 10..15 s."""

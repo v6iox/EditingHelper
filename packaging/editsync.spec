@@ -63,7 +63,7 @@ if sys.platform == "darwin":
         bundle_identifier="com.86autolab.editsync",
         info_plist={
             "NSHighResolutionCapable": True,
-            "CFBundleShortVersionString": "1.0.0",
+            "CFBundleShortVersionString": "1.0.1",
             "NSHumanReadableCopyright": "© 86 Auto Lab — MIT License",
         },
     )

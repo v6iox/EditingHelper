@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.1 — 2026-07-02
+
+- macOS builds are now **code-signed with a Developer ID certificate,
+  notarized by Apple, and stapled** — the app opens with a normal
+  double-click, no Gatekeeper warning or right-click workaround.
+- Added `packaging/setup_signing.sh`, a one-command setup that
+  provisions the signing certificate and CI secrets.
+
 ## 1.0.0 — 2026-07-02
 
 First release. EditSync — by 86 Auto Lab.
